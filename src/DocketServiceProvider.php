@@ -12,4 +12,18 @@ class DocketServiceProvider extends ServiceProvider
     {
         $this->mergeConfigFrom(__DIR__.'/../config/docket.php', 'docket');
     }
+
+    /** @internal */
+    public function boot(): void
+    {
+        if ($this->app->runningInConsole()) {
+            $this->publishes([
+                __DIR__.'/../config/docket.php' => config_path('docket.php'),
+            ], 'docket-config');
+
+            $this->publishesMigrations([
+                __DIR__.'/../database/migrations' => database_path('migrations'),
+            ], 'docket-migrations');
+        }
+    }
 }

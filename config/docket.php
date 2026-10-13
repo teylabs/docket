@@ -1,5 +1,9 @@
 <?php
 
 return [
-    // Configuration options will be added as Docket's features are developed.
+    'connection' => null,
+    'poll_after_ms' => 2000,
+    'routes' => [
+        'prefix' => 'docket',
+    ],
 ];
