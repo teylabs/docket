@@ -6,6 +6,9 @@ All timestamps are ISO 8601 UTC. Responses send `Cache-Control: private, no-stor
 
 ### Snapshot (`GET /docket/runs/{token}`, `Run::toArray()`)
 
+- [x] `Run::toArray()` and Eloquent JSON serialization implement the v1 snapshot ([#4](https://github.com/teylabs/docket/issues/4), unreleased).
+- [ ] HTTP routes, response headers, reporting and automatic tree roll-up. Progress and child counts currently read persisted counters; action links use the application's Gate abilities.
+
 | Field | Type | Null | Meaning |
 | --- | --- | --- | --- |
 | `schema_version` | int | no | `1`. Fields are only ever added within v1. |

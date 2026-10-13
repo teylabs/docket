@@ -4,6 +4,19 @@
 
 Namespace `Tey\Docket` unless noted. **0.x** = the milestone that ships it (see Part 5).
 
+Implemented for 0.1, unreleased ([#4](https://github.com/teylabs/docket/issues/4)):
+
+- [x] Publishable migrations for `docket_runs`, `docket_items` and `docket_logs`; `docket.connection`.
+- [x] `Run` attributes, enum casts, relations, `results()`, status checks, `cancelRequested()` and query scopes.
+- [x] `Run::toArray()` as the v1 status snapshot, with persisted progress and child counters.
+- [x] `RunStatus`, `Item`, `ItemStatus`, `Log` and `HasRuns` (`runs()` and `latestRun()`).
+- [x] `Progress` (`done`, `total`, `percent` and its string form).
+- [ ] Starting work, tickets, reporting and control methods.
+- [ ] Tree traversal and automatic progress/status roll-up; the persisted counters are ready for these updates.
+- [ ] Package routes and the default policy.
+
+With `connection => null`, Docket opens a separate connection using the default database's configuration. SQLite `:memory:` databases belong to one connection, so use file-backed SQLite when application and Docket records need to share a database. SQLite also permits only one writer at a time; use a separate Docket database if the application must hold a write transaction while Docket writes.
+
 ### Facade `Tey\Docket\Facades\Docket`
 
 | Signature | Meaning | Ms |
