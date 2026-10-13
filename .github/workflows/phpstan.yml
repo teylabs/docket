@@ -2,7 +2,7 @@ name: PHPStan
 
 on:
   push:
-    branches: [main]
+    branches: [main, '*.x']
   pull_request:
 
 permissions:
@@ -16,6 +16,7 @@ jobs:
   phpstan:
     name: phpstan
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
 

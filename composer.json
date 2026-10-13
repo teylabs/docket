@@ -68,6 +68,17 @@
             "providers": [
                 "Tey\\Docket\\DocketServiceProvider"
             ]
+        },
+        "tey-standards": {
+            "ci": {
+                "default-branches": [
+                    "main",
+                    "*.x"
+                ],
+                "distribution": "package",
+                "drafts": "full",
+                "enforce": true
+            }
         }
     },
     "minimum-stability": "dev",
