@@ -1,9 +1,14 @@
 # Docket
 
-> Docket is a Laravel package skeleton in early development. There is no release or usable feature yet.
+> Docket (tey/docket) wraps any piece of work in a Laravel app in a durable run with a ticket. Run a closure inline with Docket::run(), or dispatch a job, batch, chain or closure through the Docket facade; either way you get a ticket that serializes to a versioned status snapshot. In early development: these documents describe the planned API, and no release exists yet.
+
+Key rules: codes, log params and results never contain content or secrets; Docket::current() is null outside a run and is the innermost run inside one; a nested Docket::run() is a child run that rolls up into its parent; item keys are stable across retries; Docket::find() does not authorize; tickets contain only the read token.
 
 ## Documents
 
-- [README](README.md): Package status, requirements and development gates.
-- [Changelog](CHANGELOG.md): Hand-written changes; currently unreleased.
-- [Agent Guidance](AGENTS.md): Setup, gates, conventions and pull request rules.
+- [README](README.md): install, sources, inline runs, the current run, dispatching, reporting, trees, UI, authorization, retention, testing
+- [API Reference](docs/reference.md): every public method by class, with the milestone it lands in
+- [JSON Status Contract v1](docs/json.md): snapshot, ticket, items, children, logs, errors, reserved codes
+- [Using Docket in an App](docs/agents.md): guidance for coding agents working in an app that uses Docket
+- [Changelog](CHANGELOG.md): hand-written changes; currently unreleased
+- [Contributor Guidance](AGENTS.md): setup, gates, conventions and pull request rules for this repository
