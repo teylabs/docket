@@ -1,0 +1,9 @@
+# Docket
+
+> Docket is a Laravel package skeleton in early development. There is no release or usable feature yet.
+
+## Documents
+
+- [README](README.md): Package status, requirements and development gates.
+- [Changelog](CHANGELOG.md): Hand-written changes; currently unreleased.
+- [Agent Guidance](AGENTS.md): Setup, gates, conventions and pull request rules.

@@ -1,0 +1,8 @@
+blank_issues_enabled: true
+contact_links:
+  - name: Report a security issue
+    url: https://github.com/teylabs/.github/blob/main/SECURITY.md
+    about: Report vulnerabilities privately using the shared security policy.
+  - name: Browse existing issues
+    url: https://github.com/teylabs/docket/issues
+    about: Check for an existing report before opening a new issue.
