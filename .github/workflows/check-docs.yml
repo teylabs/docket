@@ -2,7 +2,7 @@ name: Check package metadata and docs
 
 on:
   push:
-    branches: [main]
+    branches: [main, '*.x']
   pull_request:
 
 permissions:
@@ -16,6 +16,7 @@ jobs:
   docs:
     name: metadata and llms.txt
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - uses: actions/checkout@v7
 
