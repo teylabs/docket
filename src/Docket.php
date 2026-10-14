@@ -20,6 +20,11 @@ class Docket
         return app(CurrentRun::class)->current();
     }
 
+    public function find(string $token): ?Run
+    {
+        return Run::where('token', $token)->first();
+    }
+
     public function job(object $job): PendingRun
     {
         return $this->pending('job', [$job]);
