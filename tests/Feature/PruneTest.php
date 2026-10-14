@@ -128,3 +128,16 @@ it('keeps nonserializable inline work usable and explicitly rejects its retry', 
         fclose($stream);
     }
 });
+
+it('releases captured database handles when inline replay serialization fails', function () {
+    $connection = app('db')->connection();
+    $pdo = $connection->getPdo();
+    $reference = WeakReference::create($pdo);
+    Docket::run(static function (Run $run) use ($connection) {
+        $connection->select('select 1');
+        $run->cancel()->throwIfCancelled();
+    });
+    $connection->disconnect();
+    unset($pdo, $connection);
+    expect($reference->get())->toBeNull();
+});

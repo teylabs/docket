@@ -22,6 +22,11 @@ class Replay
             $serialized = serialize([$source, $jobs]);
         } catch (Throwable) {
             // Inline work need not be serializable to execute in its own process.
+            // Failed closure serialization can leave cyclic copies of captured
+            // connections. Release them now, not at an arbitrary later GC pass.
+            unset($jobs);
+            gc_collect_cycles();
+
             return null;
         }
 
