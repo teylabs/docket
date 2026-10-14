@@ -235,6 +235,11 @@ class Run extends Model
         return $this->cancel_requested;
     }
 
+    public function ticket(): Ticket
+    {
+        return new Ticket($this->id, $this->token, $this->name, $this->status, $this->revision);
+    }
+
     /** @param Builder<static> $query */
     public function scopeNamed(Builder $query, string $name): void
     {
