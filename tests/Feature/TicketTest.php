@@ -44,6 +44,7 @@ it('returns 202 while unfinished and 200 once finished with Location and private
 })->with(RunStatus::cases());
 
 it('keeps the original status and revision but resolves permissions for the current user', function () {
+    Gate::policy(Run::class, stdClass::class);
     $run = Run::create(['name' => 'export.build']);
     $ticket = $run->ticket();
     Gate::define('cancel', fn (?object $user, Run $run) => true);

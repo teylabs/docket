@@ -10,6 +10,7 @@ use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Queue\Queue;
 use Illuminate\Support\Facades\Event;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\ServiceProvider;
 use Tey\Docket\Dispatch\Tracking;
 use Tey\Docket\Dispatch\Transactions;
@@ -29,6 +30,14 @@ class DocketServiceProvider extends ServiceProvider
     /** @internal */
     public function boot(): void
     {
+        if (Gate::getPolicyFor(Run::class) === null) {
+            Gate::policy(Run::class, Policies\RunPolicy::class);
+        }
+
+        if (config()->boolean('docket.routes.enabled')) {
+            $this->loadRoutesFrom(__DIR__.'/../routes/docket.php');
+        }
+
         Queue::createPayloadUsing(static fn ($connection, $queue, array $payload) => app(Tracking::class)->payload($payload));
 
         Event::listen(JobProcessing::class, [Tracking::class, 'processing']);

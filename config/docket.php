@@ -7,6 +7,8 @@ return [
     'poll_after_ms' => 2000,
     'max_depth' => 10,
     'routes' => [
+        'enabled' => true,
         'prefix' => 'docket',
+        'middleware' => ['web'],
     ],
 ];

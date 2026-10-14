@@ -102,6 +102,7 @@ it('normalizes timestamps to UTC, preserves error params as objects and ends pol
 });
 
 it('includes action links only for allowed viewers and applicable statuses', function (RunStatus $status) {
+    Gate::policy(Run::class, stdClass::class);
     $run = Run::create(['name' => 'rows.import', 'status' => $status]);
     config(['docket.routes.prefix' => 'api/work', 'docket.poll_after_ms' => 3500]);
     Gate::define('cancel', fn (?object $user, Run $run) => true);

@@ -5,7 +5,7 @@
 
 > [!NOTE]
 > Docket is in early development and has no release yet. This README describes the planned API, accepted as the design for 0.1–0.3. [docs/reference.md](docs/reference.md) tags every entry with the milestone it lands in. Until 0.1 is tagged, nothing below is guaranteed to work.
-> The runs, items and logs schema, model reads, status snapshot, queued dispatch, inline runs, in-process results, the current run, JSON tickets, reporting from the work, run trees with roll-up, depth and exact-repeat protection, linked top-level runs, cancel/retry controls, pruning and testing fakes are implemented. Package routes are not implemented yet; the reference tracks what is available.
+> The runs, items and logs schema, model reads, status snapshot, queued dispatch, inline runs, in-process results, the current run, JSON tickets, reporting from the work, run trees with roll-up, depth and exact-repeat protection, linked top-level runs, cancel/retry controls, pruning, testing fakes, package JSON routes and the default policy are implemented. Rendered progress surfaces and the watch page are not implemented yet; the reference tracks what is available.
 
 Docket wraps any piece of work in your Laravel app, from one statement to a queued import of a million rows, in a run: a durable record that it happened, with a ticket you can hand to a page, a console or an API client. Code running inside the work, down to a model observer, can report to the run as it goes. Long work usually means a spinner, a status column, a progress table and a polling endpoint written for each feature. With Docket, each one reads the same status, even after a reload, and can retry only the rows that failed.
 
