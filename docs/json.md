@@ -10,6 +10,7 @@ All timestamps are ISO 8601 UTC. Responses send `Cache-Control: private, no-stor
 - [x] Reporting updates progress, item counts, step, results and revision; `partial` stays bounded to the newest 20 item references. Checkpoints never enter the snapshot or ticket ([#7](https://github.com/teylabs/docket/issues/7), unreleased). Structural limits are listed in [the reference](reference.md).
 - [x] Automatic tree progress/status roll-up, parent/root ids, direct-child counts and conditional `links.children` ([#8](https://github.com/teylabs/docket/issues/8), unreleased). Detached children remain in child counts but not rolled-up progress or status.
 - [x] `linkedTo()` populates `linked_from_run_id` on a new root without changing the original's counters or status ([#9](https://github.com/teylabs/docket/issues/9), unreleased). Fingerprints and work input are never snapshot or ticket fields.
+- [x] Cancellation sets `cancel_requested` until completion; retries populate `retry_of_run_id` and inherit successful progress. Reaping exposes `run.stalled`; expiry deletes only finished runs (#10). Replay input, checkpoints, batch ids and heartbeat timestamps remain private storage, not JSON fields.
 - [ ] HTTP routes and response headers. Action links use the application's Gate abilities.
 
 | Field | Type | Null | Meaning |

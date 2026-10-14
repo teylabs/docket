@@ -21,6 +21,7 @@ class Reporter
                 $before = clone $stored;
                 $callback($stored);
                 $stored->setAttribute('updated_at', now());
+                $stored->setAttribute('last_report_at', now());
                 // A heartbeat is a change even when the clock or value has not moved.
                 $stored->revision++;
                 $stored->save();

@@ -3,6 +3,7 @@
 namespace Tey\Docket\Dispatch;
 
 use Closure;
+use Illuminate\Bus\Batch;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Event;
@@ -39,7 +40,13 @@ class Dispatcher
             }
 
             if ($source === 'batch') {
-                $batch = Bus::batch($jobs)->name($run->name)->allowFailures();
+                $batch = Bus::batch($jobs)->name($run->name)->allowFailures()->before(static function (Batch $batch) use ($id): void {
+                    $run = Run::findOrFail($id);
+                    $run->update(['batch_id' => $batch->id]);
+                    if ($run->cancel_requested) {
+                        $batch->cancel();
+                    }
+                });
 
                 if ($sync) {
                     $batch->onConnection('sync');

@@ -516,6 +516,108 @@ it('stops a cancelled queued run before handling and preserves completed item re
         ->and($run->items()->pending()->count())->toBe(1)->and(DB::table('work_results')->count())->toBe(0);
 });
 
+it('requests cancellation idempotently and cancels the native batch before the next safe point', function () {
+    $run = Docket::batch([new ReportingWork('first'), new ReportingWork('next')])->dispatch()->run();
+    artisan('queue:work', ['--once' => true, '--sleep' => 0])->assertSuccessful();
+    $stale = Run::findOrFail($run->id);
+    expect($run->cancel())->toBe($run);
+    $revision = $run->revision;
+    $stale->cancel();
+    expect($run->refresh()->status)->toBe(RunStatus::Running)
+        ->and($run->cancelRequested())->toBeTrue()
+        ->and($run->revision)->toBe($revision)
+        ->and(Bus::findBatch($run->getAttribute('batch_id'))->cancelled())->toBeTrue();
+    artisan('queue:work', ['--stop-when-empty' => true, '--sleep' => 0])->assertSuccessful();
+    expect($run->refresh()->cancelled())->toBeTrue()
+        ->and($run->cancelRequested())->toBeFalse()
+        ->and($run->succeeded_count)->toBe(1)
+        ->and(DB::table('work_results')->pluck('label')->all())->toBe(['first']);
+    $revision = $run->revision;
+    $run->cancel();
+    expect($run->revision)->toBe($revision);
+});
+
+it('retries native batches and chains with fresh identities and skips inherited successes', function (string $source) {
+    $pending = $source === 'batch'
+        ? Docket::batch([new ReportingWork('first'), [new ReportingWork('next'), new RecordWork('last')]])
+        : Docket::chain([new ReportingWork('first'), new RecordWork('last')]);
+    $run = $pending->name('retry.work')->unique()->idempotencyKey('original')->dispatch()->run();
+    if ($source === 'batch') {
+        artisan('queue:work', ['--once' => true, '--sleep' => 0])->assertSuccessful();
+    }
+    $run->checkpoint(['page' => 2]);
+    $run->cancel();
+    artisan('queue:work', ['--stop-when-empty' => true, '--sleep' => 0])->assertSuccessful();
+    $retry = $run->refresh()->retry()->dispatch()->run();
+    expect($retry->id)->not->toBe($run->id)->and($retry->token)->not->toBe($run->token)
+        ->and($retry->retry_of_run_id)->toBe($run->id)->and($retry->parent_run_id)->toBeNull()
+        ->and($retry->checkpoint())->toBe(['page' => 2])->and($retry->name)->toBe('retry.work')
+        ->and($retry->getAttribute('unique_key'))->toBeNull()->and($retry->getAttribute('idempotency_key'))->toBeNull();
+    $run->update(['expires_at' => now()]);
+    artisan('docket:prune')->assertSuccessful();
+    expect(Run::find($run->id))->toBeNull();
+    artisan('queue:work', ['--stop-when-empty' => true, '--sleep' => 0])->assertSuccessful();
+    expect($retry->refresh()->succeeded())->toBeTrue()
+        ->and(DB::table('work_results')->pluck('label')->all())->toBe($source === 'batch' ? ['first', 'next', 'last'] : ['first', 'last']);
+})->with(['batch', 'chain']);
+
+it('replays an inline closure on the queue with its checkpoint and no repeated successful side effects', function () {
+    $run = Docket::run('pages', static function (Run $run) {
+        foreach ($run->track(['one', 'two', 'three']) as $key) {
+            DB::table('work_results')->insert(['label' => $key]);
+            $run->itemSucceeded($key, result: 'file:'.$key, count: 2);
+            if ($run->retry_of_run_id === null) {
+                $run->checkpoint(42)->cancel()->throwIfCancelled();
+            }
+        }
+        $run->log('checkpoint.inherited', ['position' => $run->checkpoint()]);
+    })->run();
+    $pending = $run->retry();
+    expect($pending)->toBeInstanceOf(PendingRun::class)->and(Run::count())->toBe(1);
+    $retry = Docket::run('outer', fn () => $pending->dispatch())->result()->run();
+    expect($retry->parent_run_id)->toBeNull()->and($retry->root_run_id)->toBeNull();
+    artisan('queue:work', ['--stop-when-empty' => true, '--sleep' => 0])->assertSuccessful();
+    expect($retry->refresh()->succeeded())->toBeTrue()->and($retry->done)->toBe(6)
+        ->and($retry->logs()->sole()->params)->toBe(['position' => 42])
+        ->and($retry->results()->all())->toBe(['one' => 'file:one', 'two' => 'file:two', 'three' => 'file:three'])
+        ->and(DB::table('work_results')->pluck('label')->all())->toBe(['one', 'two', 'three']);
+    expect($retry->toJson())->not->toContain('replay', 'checkpoint', 'batch_id', 'last_report_at');
+});
+
+it('rejects retrying unfinished and succeeded runs using their persisted status', function (RunStatus $status) {
+    $run = Docket::dispatch(new RecordWork)->run();
+    $run->update(['status' => $status]);
+    expect(fn () => $run->retry())->toThrow(LogicException::class)
+        ->and(Run::count())->toBe(1);
+})->with([RunStatus::Queued, RunStatus::Running, RunStatus::Succeeded]);
+
+it('replays failed work and preserves subject initiator and stale interval without old expiry', function () {
+    $subject = Upload::create();
+    $user = User::create();
+    $run = Docket::job(new ReportingWork('bad', 'stop'))->about($subject)->by($user)
+        ->catch(static fn (Run $run) => $run->logs()->create(['code' => 'callback.catch']))
+        ->staleAfter(12)->expiresAt(now()->addHour())->dispatchSync()->run();
+    $retry = $run->retry()->dispatchSync()->run();
+    expect($retry->failed())->toBeTrue()->and($retry->error)->toBe($run->error)
+        ->and($retry->subject->is($subject))->toBeTrue()->and($retry->initiator->is($user))->toBeTrue()
+        ->and($retry->stale_after)->toBe(12)->and($retry->expires_at)->toEqual($retry->finished_at->copy()->addDay())
+        ->and($retry->logs()->where('code', 'callback.catch')->count())->toBe(1);
+});
+
+it('inherits all successful keys across repeated partial retries', function () {
+    $run = Docket::batch([new ReportingWork('good'), new ReportingWork('skip', 'skip')])->dispatch()->run();
+    artisan('queue:work', ['--stop-when-empty' => true, '--sleep' => 0])->assertSuccessful();
+    $retry = $run->retry()->dispatch()->run();
+    artisan('queue:work', ['--stop-when-empty' => true, '--sleep' => 0])->assertSuccessful();
+    $next = $retry->retry()->dispatch()->run();
+    artisan('queue:work', ['--stop-when-empty' => true, '--sleep' => 0])->assertSuccessful();
+    $next->refresh();
+    expect($next->partial())->toBeTrue()->and($next->succeeded_count)->toBe(1)->and($next->skipped_count)->toBe(1)
+        ->and($next->retry_of_run_id)->toBe($retry->id)
+        ->and(DB::table('work_results')->where('label', 'good')->count())->toBe(1)
+        ->and(DB::table('work_results')->where('label', 'skip')->count())->toBe(3);
+});
+
 it('counts duplicate keyed deliveries once and preserves successes after an unkeyed failure', function () {
     $failed = new RecordWork('bad', 'fail');
     $failed->tries = 1;

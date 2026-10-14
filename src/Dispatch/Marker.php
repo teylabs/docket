@@ -21,19 +21,23 @@ class Marker
 
     public function handle(object $job, Closure $next): mixed
     {
-        if (method_exists($job, 'batch') && $job->batch()?->cancelled()) {
-            return null;
-        }
-
         $run = app(CurrentRun::class)->current() ?? Run::findOrFail($this->runId);
         $run->reportingKey = $this->itemKey;
 
-        if ($run->failed() || $run->cancelled() || $run->completion_status !== null || ($this->itemKey !== null && app(Reporter::class)->succeeded($run, $this->itemKey))) {
+        if ($run->failed() || $run->cancelled() || $run->completion_status !== null) {
             return null;
         }
 
         try {
             $run->throwIfCancelled();
+
+            if ($this->itemKey !== null && app(Reporter::class)->succeeded($run, $this->itemKey)) {
+                return null;
+            }
+
+            if (method_exists($job, 'batch') && $job->batch()?->cancelled()) {
+                return null;
+            }
 
             return $next($job);
         } catch (RunFailed $exception) {

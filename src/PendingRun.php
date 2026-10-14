@@ -44,6 +44,8 @@ class PendingRun
 
     private ?DateTimeInterface $expiry = null;
 
+    private ?Run $retryOf = null;
+
     /** @var array<string, list<SerializableClosure>> */
     private array $callbacks = [];
 
@@ -154,6 +156,25 @@ class PendingRun
         return $this->start(false);
     }
 
+    /** @internal */
+    public function retrying(Run $run): static
+    {
+        $this->retryOf = $run;
+        $this->name = $run->name;
+        $this->subject = $run->subject;
+        $this->initiator = $run->initiator instanceof Authenticatable ? $run->initiator : null;
+        $this->units = $run->total;
+        $this->staleSeconds = $run->stale_after;
+        $serialized = $run->getAttribute('callbacks');
+        if (is_string($serialized)) {
+            /** @var array<string, list<SerializableClosure>> $callbacks */
+            $callbacks = unserialize(base64_decode($serialized));
+            $this->callbacks = $callbacks;
+        }
+
+        return $this;
+    }
+
     public function detached(): static
     {
         $this->isDetached = true;
@@ -245,6 +266,9 @@ class PendingRun
                     'unique_key' => $unique,
                     'idempotency_key' => $key,
                     'callbacks' => $this->callbacks === [] ? null : base64_encode(serialize($this->callbacks)),
+                    'replay' => app(Dispatch\Replay::class)->encode($callback === null ? $this->source : 'job', $callback === null ? $this->jobs : [$callback]),
+                    'retry_of_run_id' => $this->retryOf?->id,
+                    'checkpoint' => $this->retryOf?->checkpoint,
                 ]);
                 $run->subject()->associate($this->subject);
 
@@ -253,11 +277,16 @@ class PendingRun
                 }
 
                 $run->initiator()->associate($this->initiator);
-                $parent = $this->linkedFrom === null ? app(CurrentRun::class)->current() : null;
+                $parent = $this->linkedFrom === null && $this->retryOf === null ? app(CurrentRun::class)->current() : null;
                 $run->parent_run_id = $parent?->id;
                 $run->root_run_id = $parent === null ? null : ($parent->root_run_id ?? $parent->id);
                 $run->linked_from_run_id = $this->linkedFrom;
                 $run->save();
+                if ($this->retryOf !== null) {
+                    foreach ($this->retryOf->items()->succeeded()->lazyById() as $item) {
+                        app(Reporting\Reporter::class)->settle($run, $item->key, ItemStatus::Succeeded, $item->result, $item->code, $item->params ?? [], $item->count);
+                    }
+                }
                 foreach ($fingerprints as $fingerprint => $job) {
                     $run->getConnection()->table('docket_fingerprints')->insert([
                         'run_id' => $run->id, 'fingerprint' => $fingerprint,
