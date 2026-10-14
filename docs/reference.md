@@ -4,6 +4,15 @@
 
 Namespace `Tey\Docket` unless noted. **0.x** = the milestone that ships it (see Part 5).
 
+Implemented for 0.1, unreleased ([#13](https://github.com/teylabs/docket/issues/13)):
+
+- [x] Stack unwinding on return, exceptions and `fail()`, queue exit resets, and Octane request, task and tick boundary resets.
+- [x] One database-queue worker processes 100 warm-up jobs and 1,000 measured jobs, with an empty stack between jobs and released run objects. Live PHP memory samples every 100 jobs must stay within 1 MiB after warm-up.
+- [x] Architecture coverage rejects static properties declared by Docket classes or traits; inherited Laravel model and facade caches are outside this rule.
+- [x] Progress query bounds at depths 1, 5 and 10; one ancestor fingerprint query regardless of job count or depth, and one latest-log query for a tree.
+- [x] Exact-repeat coverage includes inline and queued recursion, continuations, normalized inputs, repeat opt-outs, release/retry attempts and fresh retry/linked histories.
+- [x] Ticket serialization loads its run once per ticket instance. `run()` still loads current storage, and every serialization checks the current viewer's permissions again. The cached model and inline result never cross PHP serialization.
+
 Implemented for 0.1, unreleased ([#4](https://github.com/teylabs/docket/issues/4)):
 
 - [x] Publishable migrations for `docket_runs`, `docket_items` and `docket_logs`; `docket.connection`.

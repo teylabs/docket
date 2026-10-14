@@ -348,3 +348,27 @@ it('distinguishes a model from an array shaped like its identity', function () {
     $run->add(new RecursiveWork('input', input: ['model', Upload::class, '4']));
     Queue::assertPushed(RecursiveWork::class, 2);
 });
+
+it('checks all ancestor fingerprints in one query for multi-job children', function (int $depth) {
+    Queue::fake();
+    $descend = function (int $level) use (&$descend, $depth): void {
+        Docket::run('level.'.$level, function (Run $run) use (&$descend, $depth, $level) {
+            if ($level < $depth - 1) {
+                $descend($level + 1);
+
+                return;
+            }
+            $connection = $run->getConnection();
+            $connection->enableQueryLog();
+            $connection->flushQueryLog();
+            Docket::chain([new RecordWork('a'), new RecordWork('b'), new RecordWork('c')])->dispatch();
+            $queries = collect($connection->getQueryLog())->pluck('query');
+            $connection->disableQueryLog();
+            $connection->flushQueryLog();
+            // One ancestor lookup plus the three jobs' own history lookups.
+            expect($queries->filter(fn (string $sql) => str_starts_with($sql, 'select') && str_contains($sql, '"docket_fingerprints"'))->count())->toBe(4);
+        });
+    };
+    $descend(0);
+    unset($descend);
+})->with([1, 5, 10]);

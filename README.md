@@ -576,6 +576,8 @@ Docket is built to stay flat in queue workers, Horizon and Octane:
 - **No static per-run state.** Runs, tickets and in-process results are never cached in static properties or singletons that outlive their work. A ticket's `result()` lives on that ticket object only, and is freed with it.
 - **Roll-up is bounded.** A progress update writes the run itself plus one counter update per ancestor, so its cost is O(depth). The depth cap (`docket.max_depth`, 10 by default) bounds it. Ancestor counters change with atomic increments, without holding row locks across children.
 
+The 0.1 hygiene suite covers these boundaries, 1,000 jobs on one worker after warm-up, and query counts at depths 1, 5 and 10. Tree reads batch-load the latest logs; ancestor recursion checks use one fingerprint lookup for all ancestors.
+
 ## Dispatching Work
 
 `Docket` mirrors `Bus`. Each call returns a pending run; `dispatch()` saves the run, queues the work and returns a ticket.

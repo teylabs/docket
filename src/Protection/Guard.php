@@ -32,13 +32,18 @@ class Guard
             throw $exception;
         }
 
-        if ($allowRepeat) {
+        if ($allowRepeat || $ancestors === [] || $fingerprints === []) {
             return;
         }
 
+        $matches = $run->getConnection()->table('docket_fingerprints')
+            ->whereIn('run_id', array_map(fn (Run $ancestor) => $ancestor->id, $ancestors))
+            ->whereIn('fingerprint', array_keys($fingerprints))
+            ->get(['run_id', 'fingerprint'])->groupBy('run_id');
+
         foreach ($ancestors as $ancestor) {
             foreach ($fingerprints as $fingerprint => $job) {
-                if ($run->getConnection()->table('docket_fingerprints')->where('run_id', $ancestor->id)->where('fingerprint', $fingerprint)->exists()) {
+                if ($matches->get($ancestor->id, collect())->contains('fingerprint', $fingerprint)) {
                     $this->loop($run, $ancestor, $fingerprint, $job, $ancestor->id);
                 }
             }

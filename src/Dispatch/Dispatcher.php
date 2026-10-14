@@ -7,6 +7,7 @@ use Illuminate\Bus\Batch;
 use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Event;
+use InvalidArgumentException;
 use Laravel\SerializableClosure\SerializableClosure;
 use Tey\Docket\CurrentRun;
 use Tey\Docket\Events\RunDispatched;
@@ -63,7 +64,7 @@ class Dispatcher
                 $chain->dispatch();
             } else {
                 if (! is_object($jobs[0])) {
-                    throw new \InvalidArgumentException('A single dispatch requires a job.');
+                    throw new InvalidArgumentException('A single dispatch requires a job.');
                 }
                 $this->dispatchJob($run, $jobs[0], $sync);
             }
@@ -94,7 +95,7 @@ class Dispatcher
                 $members = is_array($group) ? array_values($group) : [$group];
                 foreach ($members as $member) {
                     if (! is_object($member)) {
-                        throw new \InvalidArgumentException('Chains may only contain jobs.');
+                        throw new InvalidArgumentException('Chains may only contain jobs.');
                     }
                 }
                 $first = $members[0];
@@ -162,7 +163,7 @@ class Dispatcher
             $first = is_array($job) ? ($job[0] ?? null) : $job;
 
             if (! is_object($first)) {
-                throw new \InvalidArgumentException('Added chains must not be empty.');
+                throw new InvalidArgumentException('Added chains must not be empty.');
             }
 
             return ! method_exists($first, 'docketKey') || ! app(Reporter::class)->succeeded($run, Values::key($first->docketKey()));
