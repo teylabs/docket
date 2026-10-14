@@ -1,21 +1,21 @@
 # API Reference
 
-> Planned API for Docket. Each entry is tagged with the milestone it lands in; nothing is released yet.
+> API for Docket. Each entry is tagged with the milestone it lands in; 0.1 is released (v0.1.0), 0.2 and 0.3 are planned.
 
 Namespace `Tey\Docket` unless noted. **0.x** = the milestone that ships it (see Part 5).
 
-Implemented for 0.1, unreleased (#31):
+Released in 0.1.0 (#31):
 
 - [x] Partial route configuration preserves unspecified defaults; middleware lists replace rather than merge, including an empty list.
 - [x] Disabled routes leave ticket and snapshot `links` empty and omit ticket response `Location`, without requiring a prefix or middleware. Other fields and HTTP statuses are unchanged.
 - [x] SQLite write-lock limits, after-commit database queue integration and application cleanup through `catch()` are documented below.
 
-Implemented for 0.1, unreleased ([#29](https://github.com/teylabs/docket/issues/29)):
+Released in 0.1.0 ([#29](https://github.com/teylabs/docket/issues/29)):
 
 - [x] `Docket::find(string $token): ?Run` reads stored runs by token without checking access. Missing tokens return `null`; ids and names are not lookup keys. Expiry is enforced by package routes and pruning, not this model lookup.
 - [x] Installation lists all five tables, the fake upload example asserts the 0.1 JSON response, and the SQLite `:memory:` testing recipe uses an explicit shared connection.
 
-Implemented for 0.1, unreleased ([#13](https://github.com/teylabs/docket/issues/13)):
+Released in 0.1.0 ([#13](https://github.com/teylabs/docket/issues/13)):
 
 - [x] Stack unwinding on return, exceptions and `fail()`, queue exit resets, and Octane request, task and tick boundary resets.
 - [x] One database-queue worker processes 100 warm-up jobs and 1,000 measured jobs, with an empty stack between jobs and released run objects. Live PHP memory samples every 100 jobs must stay within 1 MiB after warm-up.
@@ -24,7 +24,7 @@ Implemented for 0.1, unreleased ([#13](https://github.com/teylabs/docket/issues/
 - [x] Exact-repeat coverage includes inline and queued recursion, continuations, normalized inputs, repeat opt-outs, release/retry attempts and fresh retry/linked histories.
 - [x] Ticket serialization loads its run once per ticket instance. `run()` still loads current storage, and every serialization checks the current viewer's permissions again. The cached model and inline result never cross PHP serialization.
 
-Implemented for 0.1, unreleased ([#4](https://github.com/teylabs/docket/issues/4)):
+Released in 0.1.0 ([#4](https://github.com/teylabs/docket/issues/4)):
 
 - [x] Publishable migrations for `docket_runs`, `docket_items` and `docket_logs`; `docket.connection`.
 - [x] `Run` attributes, enum casts, relations, `results()`, status checks, `cancelRequested()` and query scopes.
@@ -36,7 +36,7 @@ Implemented for 0.1, unreleased ([#4](https://github.com/teylabs/docket/issues/4
 - [x] Tree traversal and automatic progress/status roll-up (#8).
 - [x] Package JSON routes and the initiator-only default policy (#12).
 
-Implemented for 0.1, unreleased ([#5](https://github.com/teylabs/docket/issues/5)):
+Released in 0.1.0 ([#5](https://github.com/teylabs/docket/issues/5)):
 
 - [x] `Docket::job()`, `batch()`, `chain()`, `dispatch()` and `dispatchSync()`; independent option starters.
 - [x] `PendingRun::name()`, `about()`, `by()`, `unique()`, `idempotencyKey()`, `total()`, `staleAfter()`, `expiresAt()`, `then()`, `catch()` and `finally()`.
@@ -46,7 +46,7 @@ Implemented for 0.1, unreleased ([#5](https://github.com/teylabs/docket/issues/5
 - [x] `RunDispatched` and `RunFinished`, after Docket's commit, with stable event ids.
 - [ ] Browser redirects and rendered progress surfaces (0.2).
 
-Implemented for 0.1, unreleased ([#6](https://github.com/teylabs/docket/issues/6)):
+Released in 0.1.0 ([#6](https://github.com/teylabs/docket/issues/6)):
 
 - [x] `Docket::run()` and `PendingRun::run()`, named or unnamed, with the existing 0.1 options and completion callbacks.
 - [x] `Ticket::result()` holds the closure's return value only on that ticket, including `null`; JSON and PHP serialization omit it. Queued, rehydrated, stored and deduplicated tickets throw `ResultNotAvailable`.
@@ -57,7 +57,7 @@ Implemented for 0.1, unreleased ([#6](https://github.com/teylabs/docket/issues/6
 - [x] Depth and loop protection (#9).
 - [ ] Progress bars (0.2).
 
-Implemented for 0.1, unreleased ([#7](https://github.com/teylabs/docket/issues/7)):
+Released in 0.1.0 ([#7](https://github.com/teylabs/docket/issues/7)):
 
 - [x] `Docketable::docket()`, with the same object as `Docket::current()` during handling, and `null` on untracked jobs.
 - [x] `track()`, eager declarations and totals, lazy declarations, succeeded-key skipping (including `retry_of_run_id`), implicit success and unsettled items on `break` or exceptions.
@@ -70,7 +70,7 @@ Implemented for 0.1, unreleased ([#7](https://github.com/teylabs/docket/issues/7
 - [x] Creation of retries and checkpoint inheritance (#10).
 - [x] `withFakeDocket()` (#11).
 
-Implemented for 0.1, unreleased ([#8](https://github.com/teylabs/docket/issues/8)):
+Released in 0.1.0 ([#8](https://github.com/teylabs/docket/issues/8)):
 
 - [x] Nested inline runs and Docket dispatches persist their parent and root, with independent tickets. `parent()`, `root()`, `children()` and breadth-first `descendants()` read the tree.
 - [x] `tree($viewer)` returns the documented node fields, policy-filtered, with the latest log and no item content. An inaccessible root returns `[]`; an inaccessible child and its branch are omitted. Traversal respects `docket.max_depth` (default 10; `null` is unlimited).
@@ -82,7 +82,7 @@ Implemented for 0.1, unreleased ([#8](https://github.com/teylabs/docket/issues/8
 - [x] Children HTTP pages and the default policy (#12).
 - [ ] Tree UI and console watchers (0.2).
 
-Implemented for 0.1, unreleased ([#9](https://github.com/teylabs/docket/issues/9)):
+Released in 0.1.0 ([#9](https://github.com/teylabs/docket/issues/9)):
 
 - [x] `docket.max_depth` defaults to 10; roots are depth 0 and `null` removes the cap. A rejected child is recorded as `run.depth_exceeded` with `params.max_depth`, without executing or queueing its work.
 - [x] `linkedTo(Run|Ticket|null)` starts a separate root, with `linked_from_run_id`, `linked()` and `linkedFrom()`. Linked work never contributes to the original's progress, status or completion; `null` is a no-op.
@@ -91,7 +91,7 @@ Implemented for 0.1, unreleased ([#9](https://github.com/teylabs/docket/issues/9
 - [x] `run.loop_detected` records `params.job` and `params.repeats` (the ancestor run id or first work id). `Events\LoopDetected` supplies the failed branch, the repeated run and the fingerprint, with a stable event id; the exception is reported to Laravel.
 - [ ] Forward snapshot links to linked runs: the accepted JSON contract and route table do not define a field or route for them. Use `linked()` and each linked run's ticket; no undocumented JSON field or route is added.
 
-Implemented for 0.1, unreleased ([#10](https://github.com/teylabs/docket/issues/10)):
+Released in 0.1.0 ([#10](https://github.com/teylabs/docket/issues/10)):
 
 - [x] `cancel()` requests cancellation once, cancels the Laravel batch and does nothing on finished runs. Safe points preserve completed items and clear `cancel_requested` on completion.
 - [x] `retry()` returns a new top-level pending run with `retry_of_run_id`, fresh identity and fingerprint history, inherited checkpoint and copied successful items. Copies survive pruning the original and further retries. Partial, failed and cancelled runs may be retried; other statuses throw `LogicException`.
@@ -324,7 +324,7 @@ Each has `string $id` (stable, for deduplication) and `Run $run`. Delivery is at
 
 The table in the README. Package JSON routes: 0.1. The watch page: 0.2. The external update route `POST /docket/runs/{id}/updates` (writer grants): 0.3.
 
-Implemented for 0.1, unreleased (#12):
+Released in 0.1.0 (#12):
 
 - [x] Snapshot, items, logs, children, cancel and retry routes, with configurable `routes.enabled`, `routes.prefix` and `routes.middleware` (defaults: `true`, `docket`, `['web']`).
 - [x] The default policy allows only the initiator, matching both morph type and id. An application policy registered with `Gate::policy()` takes precedence. Guests and runs without an initiator are denied by default.
@@ -346,7 +346,7 @@ Implemented for 0.1, unreleased (#12):
 
 ### Fake (`Docket::fake()` → `Tey\Docket\Testing\DocketFake`)
 
-Implemented for 0.1, unreleased ([#11](https://github.com/teylabs/docket/issues/11)):
+Released in 0.1.0 ([#11](https://github.com/teylabs/docket/issues/11)):
 
 - [x] Dispatch, batch, chain and inline assertions, including counts, callbacks and negative assertions.
 - [x] Inline closures execute with `Tey\Docket\Testing\FakeRun` as the current run; nested calls restore their parent even on exceptions. Results stay on the returned ticket only.

@@ -4,14 +4,14 @@
 
 All timestamps are ISO 8601 UTC. Responses send `Cache-Control: private, no-store`.
 
-- [x] With `docket.routes.enabled = false`, snapshots and tickets retain `links` as an empty array (`"links": []` in JSON). All route links below are absent, even for authorized actions or runs with children. Ticket responses omit `Location`. All other fields, including `poll_after_ms`, and HTTP statuses are unchanged (#31, 0.1, unreleased).
+- [x] With `docket.routes.enabled = false`, snapshots and tickets retain `links` as an empty array (`"links": []` in JSON). All route links below are absent, even for authorized actions or runs with children. Ticket responses omit `Location`. All other fields, including `poll_after_ms`, and HTTP statuses are unchanged (#31, 0.1.0).
 
 ### Snapshot (`GET /docket/runs/{token}`, `Run::toArray()`)
 
-- [x] `Run::toArray()` and Eloquent JSON serialization implement the v1 snapshot ([#4](https://github.com/teylabs/docket/issues/4), unreleased).
-- [x] Reporting updates progress, item counts, step, results and revision; `partial` stays bounded to the newest 20 item references. Checkpoints never enter the snapshot or ticket ([#7](https://github.com/teylabs/docket/issues/7), unreleased). Structural limits are listed in [the reference](reference.md).
-- [x] Automatic tree progress/status roll-up, parent/root ids, direct-child counts and conditional `links.children` ([#8](https://github.com/teylabs/docket/issues/8), unreleased). Detached children remain in child counts but not rolled-up progress or status.
-- [x] `linkedTo()` populates `linked_from_run_id` on a new root without changing the original's counters or status ([#9](https://github.com/teylabs/docket/issues/9), unreleased). Fingerprints and work input are never snapshot or ticket fields.
+- [x] `Run::toArray()` and Eloquent JSON serialization implement the v1 snapshot ([#4](https://github.com/teylabs/docket/issues/4), 0.1.0).
+- [x] Reporting updates progress, item counts, step, results and revision; `partial` stays bounded to the newest 20 item references. Checkpoints never enter the snapshot or ticket ([#7](https://github.com/teylabs/docket/issues/7), 0.1.0). Structural limits are listed in [the reference](reference.md).
+- [x] Automatic tree progress/status roll-up, parent/root ids, direct-child counts and conditional `links.children` ([#8](https://github.com/teylabs/docket/issues/8), 0.1.0). Detached children remain in child counts but not rolled-up progress or status.
+- [x] `linkedTo()` populates `linked_from_run_id` on a new root without changing the original's counters or status ([#9](https://github.com/teylabs/docket/issues/9), 0.1.0). Fingerprints and work input are never snapshot or ticket fields.
 - [x] Cancellation sets `cancel_requested` until completion; retries populate `retry_of_run_id` and inherit successful progress. Reaping exposes `run.stalled`; expiry deletes only finished runs (#10). Replay input, checkpoints, batch ids and heartbeat timestamps remain private storage, not JSON fields.
 - [x] HTTP routes, private/no-store response headers, initiator-only default policy, current-viewer action links and access checks on every request (#12).
 
@@ -57,8 +57,8 @@ Full example: README, "The Status Snapshot". A failed run, for illustration:
 
 ### Ticket (`run()` and dispatch responses, `Ticket::toArray()`)
 
-- [x] Dispatch tickets, `Run::ticket()`, exact ticket fields, current-user action links, JSON and PHP serialization, `202`/`200`, `Location` and `Cache-Control: private, no-store` ([#5](https://github.com/teylabs/docket/issues/5), unreleased).
-- [x] Inline tickets use the same fields and status-dependent HTTP response. In-process results never enter JSON or PHP serialization ([#6](https://github.com/teylabs/docket/issues/6), unreleased).
+- [x] Dispatch tickets, `Run::ticket()`, exact ticket fields, current-user action links, JSON and PHP serialization, `202`/`200`, `Location` and `Cache-Control: private, no-store` ([#5](https://github.com/teylabs/docket/issues/5), 0.1.0).
+- [x] Inline tickets use the same fields and status-dependent HTTP response. In-process results never enter JSON or PHP serialization ([#6](https://github.com/teylabs/docket/issues/6), 0.1.0).
 - [x] Package JSON routes (#12).
 - [x] Repeated ticket serialization reuses its loaded run without retaining permission decisions or adding cached state to the JSON/PHP payload (#13).
 - [ ] Browser redirects and rendered progress surfaces (0.2).
@@ -125,7 +125,7 @@ Cursor-paginated direct children, oldest first, at most 100 per page. Only child
 
 ### Reserved codes
 
-- [x] Inline exceptions record `run.exception`, with an activity log entry of the same code and `params.exception` containing only the exception class name. Application transaction rollbacks record `run.rolled_back` ([#6](https://github.com/teylabs/docket/issues/6), unreleased).
+- [x] Inline exceptions record `run.exception`, with an activity log entry of the same code and `params.exception` containing only the exception class name. Application transaction rollbacks record `run.rolled_back` ([#6](https://github.com/teylabs/docket/issues/6), 0.1.0).
 - [x] Uncaught child exceptions record `run.child_failed`, with `params.child` naming the direct child (#8). The snapshot exposes the error when the parent reaches `failed`, after its attached children finish.
 - [x] Depth failures record `run.depth_exceeded` with `params.max_depth`; exact repeats record `run.loop_detected` with `params.job` and `params.repeats` (#9). For recursion, `repeats` is the ancestor run id; for continuation, it is the first work id. The loop event's `repeats` is the run that owns that work. Caught child failures roll up as partial; uncaught ones become `run.child_failed` on the parent.
 
