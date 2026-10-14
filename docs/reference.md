@@ -11,9 +11,19 @@ Implemented for 0.1, unreleased ([#4](https://github.com/teylabs/docket/issues/4
 - [x] `Run::toArray()` as the v1 status snapshot, with persisted progress and child counters.
 - [x] `RunStatus`, `Item`, `ItemStatus`, `Log` and `HasRuns` (`runs()` and `latestRun()`).
 - [x] `Progress` (`done`, `total`, `percent` and its string form).
-- [ ] Starting work, tickets, reporting and control methods.
+- [ ] Inline runs, in-process results, the current run, reporting and control methods.
 - [ ] Tree traversal and automatic progress/status roll-up; the persisted counters are ready for these updates.
 - [ ] Package routes and the default policy.
+
+Implemented for 0.1, unreleased ([#5](https://github.com/teylabs/docket/issues/5)):
+
+- [x] `Docket::job()`, `batch()`, `chain()`, `dispatch()` and `dispatchSync()`; independent option starters (inline execution follows in #6).
+- [x] `PendingRun::name()`, `about()`, `by()`, `unique()`, `idempotencyKey()`, `total()`, `staleAfter()`, `expiresAt()`, `then()`, `catch()` and `finally()`.
+- [x] Default names, authenticated initiators, keyed batch totals, native Laravel jobs, batches and chains, and enqueueing after commit with `run.rolled_back` on rollback.
+- [x] `PendingRun::dispatch()` and `dispatchSync()`, final status, expiry timestamps and completion callbacks. Item settlement and added work follow in #7; staleness reaping follows in #10.
+- [x] `Run::ticket()` and `Ticket`'s readonly fields, `run()`, `toArray()`, `jsonSerialize()` and JSON `toResponse()`; PHP serialization carries the ticket fields only.
+- [x] `RunDispatched` and `RunFinished`, after Docket's commit, with stable event ids.
+- [ ] `Ticket::result()` (#6); browser redirects and rendered progress surfaces (0.2).
 
 With `connection => null`, Docket opens a separate connection using the default database's configuration. SQLite `:memory:` databases belong to one connection, so use file-backed SQLite when application and Docket records need to share a database. SQLite also permits only one writer at a time; use a separate Docket database if the application must hold a write transaction while Docket writes.
 
@@ -28,6 +38,7 @@ With `connection => null`, Docket opens a separate connection using the default 
 | `batch(iterable $jobs): PendingRun` | A pending run for a Laravel batch. A member can be a job or an array (a chain). | 0.1 |
 | `chain(array $jobs): PendingRun` | A pending run for a Laravel chain. | 0.1 |
 | `dispatch(object $job): Ticket` | Shortcut for `job($job)->dispatch()`. | 0.1 |
+| `dispatchSync(object $job): Ticket` | Shortcut for `job($job)->dispatchSync()`. | 0.1 |
 | `find(string $token): ?Run` | Find a run by its token. It doesn't check access. | 0.1 |
 | `fake(): DocketFake` | Swap in the fake (see below). | 0.1 |
 

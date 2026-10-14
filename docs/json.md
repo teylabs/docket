@@ -51,6 +51,9 @@ Full example: README, "The Status Snapshot". A failed run, for illustration:
 
 ### Ticket (`run()` and dispatch responses, `Ticket::toArray()`)
 
+- [x] Dispatch tickets, `Run::ticket()`, exact ticket fields, current-user action links, JSON and PHP serialization, `202`/`200`, `Location` and `Cache-Control: private, no-store` ([#5](https://github.com/teylabs/docket/issues/5), unreleased).
+- [ ] Inline results (#6), package routes (#12), browser redirects and rendered progress surfaces (0.2).
+
 A strict subset of the snapshot: `schema_version`, `id`, `token`, `name`, `status`, `revision`, `poll_after_ms`, and `links` with `poll` plus `cancel`/`retry` under the same conditions. Never: writer grants, capability secrets, `checkpoint`, item content, subject attributes, or the in-process `result()` of a `Docket::run()` ticket. Example: the top of the README. A `Docket::run()` ticket is usually finished, so it answers `200`. HTTP status: `202` while unfinished, `200` when finished. A `Location` header gives the poll link. This applies when the request expects JSON (`Accept: application/json`, or `$request->expectsJson()`). From 0.2, other requests get a `303` redirect to the watch page instead. The same fields, and nothing more, go into Inertia props, Livewire round trips and queued payloads.
 
 ### Items page (`links.items`)

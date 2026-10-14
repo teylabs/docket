@@ -22,6 +22,10 @@ return new class extends Migration
             $table->string('name')->index();
             $table->string('status')->default('queued')->index();
             $table->unsignedBigInteger('revision')->default(1);
+            $table->string('unique_key', 64)->nullable()->unique();
+            $table->string('idempotency_key', 64)->nullable()->unique();
+            $table->unsignedInteger('stale_after')->nullable();
+            $table->text('callbacks')->nullable();
             $table->string('step')->nullable();
             $table->unsignedBigInteger('done')->default(0);
             $table->unsignedBigInteger('total')->nullable();

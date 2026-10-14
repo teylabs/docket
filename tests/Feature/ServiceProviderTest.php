@@ -7,6 +7,8 @@ it('boots the provider and merges the schema and snapshot config', function () {
         ->and(app()->getProvider(DocketServiceProvider::class))->toBeInstanceOf(DocketServiceProvider::class)
         ->and(config('docket'))->toBe([
             'connection' => null,
+            'ttl' => 86400,
+            'stale_after' => 3600,
             'poll_after_ms' => 2000,
             'routes' => ['prefix' => 'docket'],
         ]);
