@@ -10,6 +10,7 @@ use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema;
 use Tey\Docket\Events\RunDispatched;
 use Tey\Docket\Events\RunFinished;
+use Tey\Docket\Exceptions\ResultNotAvailable;
 use Tey\Docket\Facades\Docket;
 use Tey\Docket\PendingRun;
 use Tey\Docket\Run;
@@ -428,4 +429,19 @@ it('rejects an initiator that cannot be stored as an Eloquent morph', function (
     expect(fn () => Docket::job(new RecordWork)->by(new GenericUser(['id' => 1]))->dispatch())
         ->toThrow(InvalidArgumentException::class, 'A run initiator must be an Eloquent model.');
     expect(Run::count())->toBe(0)->and(Queue::size())->toBe(0);
+});
+
+it('sets the current run on a real worker and clears it before the next job', function () {
+    $ticket = Docket::job(function (Run $run) {
+        DB::table('work_results')->insert(['label' => Docket::current()->id ?? 'missing']);
+        Docket::run('nested', fn () => null);
+        DB::table('work_results')->insert(['label' => Docket::current()->id ?? 'missing']);
+    })->dispatch();
+    expect(fn () => $ticket->result())->toThrow(ResultNotAvailable::class);
+    dispatch(function () {
+        DB::table('work_results')->insert(['label' => Docket::current() === null ? 'clear' : 'leaked']);
+    });
+    artisan('queue:work', ['--stop-when-empty' => true, '--sleep' => 0])->assertSuccessful();
+    expect(DB::table('work_results')->pluck('label')->all())->toBe([$ticket->id, $ticket->id, 'clear'])
+        ->and(Docket::current())->toBeNull();
 });

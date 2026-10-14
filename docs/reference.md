@@ -11,19 +11,30 @@ Implemented for 0.1, unreleased ([#4](https://github.com/teylabs/docket/issues/4
 - [x] `Run::toArray()` as the v1 status snapshot, with persisted progress and child counters.
 - [x] `RunStatus`, `Item`, `ItemStatus`, `Log` and `HasRuns` (`runs()` and `latestRun()`).
 - [x] `Progress` (`done`, `total`, `percent` and its string form).
-- [ ] Inline runs, in-process results, the current run, reporting and control methods.
+- [ ] Reporting (except inline `fail()`) and control methods.
 - [ ] Tree traversal and automatic progress/status roll-up; the persisted counters are ready for these updates.
 - [ ] Package routes and the default policy.
 
 Implemented for 0.1, unreleased ([#5](https://github.com/teylabs/docket/issues/5)):
 
-- [x] `Docket::job()`, `batch()`, `chain()`, `dispatch()` and `dispatchSync()`; independent option starters (inline execution follows in #6).
+- [x] `Docket::job()`, `batch()`, `chain()`, `dispatch()` and `dispatchSync()`; independent option starters.
 - [x] `PendingRun::name()`, `about()`, `by()`, `unique()`, `idempotencyKey()`, `total()`, `staleAfter()`, `expiresAt()`, `then()`, `catch()` and `finally()`.
 - [x] Default names, authenticated initiators, keyed batch totals, native Laravel jobs, batches and chains, and enqueueing after commit with `run.rolled_back` on rollback.
 - [x] `PendingRun::dispatch()` and `dispatchSync()`, final status, expiry timestamps and completion callbacks. Item settlement and added work follow in #7; staleness reaping follows in #10.
 - [x] `Run::ticket()` and `Ticket`'s readonly fields, `run()`, `toArray()`, `jsonSerialize()` and JSON `toResponse()`; PHP serialization carries the ticket fields only.
 - [x] `RunDispatched` and `RunFinished`, after Docket's commit, with stable event ids.
-- [ ] `Ticket::result()` (#6); browser redirects and rendered progress surfaces (0.2).
+- [ ] Browser redirects and rendered progress surfaces (0.2).
+
+Implemented for 0.1, unreleased ([#6](https://github.com/teylabs/docket/issues/6)):
+
+- [x] `Docket::run()` and `PendingRun::run()`, named or unnamed, with the existing 0.1 options and completion callbacks.
+- [x] `Ticket::result()` holds the closure's return value only on that ticket, including `null`; JSON and PHP serialization omit it. Queued, rehydrated, stored and deduplicated tickets throw `ResultNotAvailable`.
+- [x] Exceptions record `run.exception` and log only the class, then rethrow unchanged. Inline `Run::fail()` throws `RunFailed` with the supplied code and params.
+- [x] Inline work executes immediately inside an application transaction; successful completion waits for commit, and rollback records `run.rolled_back` on Docket's connection.
+- [x] `Docket::current()` uses a scoped stack that unwinds in `finally`, with queue exit resets and Octane request, task and tick boundary resets. Synchronous queue work restores its caller's stack.
+- [ ] `Docketable` and queued `fail()` semantics (#7), parent/child persistence and roll-up (#8), depth and loop protection (#9), and progress bars (0.2). Nested inline calls currently restore the stack but do not form a stored tree.
+
+An explicit name passed to `run()` takes precedence over `name()`; the closure-only form keeps `name()` or defaults to `closure`. A reused unique or idempotent run does not execute the closure again and cannot recover an earlier in-process result. An exception failure is final and is not replaced by a later rollback.
 
 With `connection => null`, Docket opens a separate connection using the default database's configuration. SQLite `:memory:` databases belong to one connection, so use file-backed SQLite when application and Docket records need to share a database. SQLite also permits only one writer at a time; use a separate Docket database if the application must hold a write transaction while Docket writes.
 

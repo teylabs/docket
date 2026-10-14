@@ -7,6 +7,7 @@ use Illuminate\Contracts\Support\Responsable;
 use Illuminate\Http\JsonResponse;
 use Illuminate\Support\Facades\Gate;
 use JsonSerializable;
+use Tey\Docket\Exceptions\ResultNotAvailable;
 
 /**
  * @api
@@ -15,6 +16,28 @@ use JsonSerializable;
  */
 class Ticket implements Arrayable, JsonSerializable, Responsable
 {
+    private bool $hasResult = false;
+
+    private mixed $inlineResult = null;
+
+    /** @internal */
+    public function withResult(mixed $result): static
+    {
+        $this->hasResult = true;
+        $this->inlineResult = $result;
+
+        return $this;
+    }
+
+    public function result(): mixed
+    {
+        if (! $this->hasResult) {
+            throw new ResultNotAvailable('No in-process result is available; queued work finishes later; read $ticket->run()->result once it is finished.');
+        }
+
+        return $this->inlineResult;
+    }
+
     /** @internal */
     public function __construct(
         public readonly string $id,

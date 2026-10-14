@@ -52,7 +52,8 @@ Full example: README, "The Status Snapshot". A failed run, for illustration:
 ### Ticket (`run()` and dispatch responses, `Ticket::toArray()`)
 
 - [x] Dispatch tickets, `Run::ticket()`, exact ticket fields, current-user action links, JSON and PHP serialization, `202`/`200`, `Location` and `Cache-Control: private, no-store` ([#5](https://github.com/teylabs/docket/issues/5), unreleased).
-- [ ] Inline results (#6), package routes (#12), browser redirects and rendered progress surfaces (0.2).
+- [x] Inline tickets use the same fields and status-dependent HTTP response. In-process results never enter JSON or PHP serialization ([#6](https://github.com/teylabs/docket/issues/6), unreleased).
+- [ ] Package routes (#12), browser redirects and rendered progress surfaces (0.2).
 
 A strict subset of the snapshot: `schema_version`, `id`, `token`, `name`, `status`, `revision`, `poll_after_ms`, and `links` with `poll` plus `cancel`/`retry` under the same conditions. Never: writer grants, capability secrets, `checkpoint`, item content, subject attributes, or the in-process `result()` of a `Docket::run()` ticket. Example: the top of the README. A `Docket::run()` ticket is usually finished, so it answers `200`. HTTP status: `202` while unfinished, `200` when finished. A `Location` header gives the poll link. This applies when the request expects JSON (`Accept: application/json`, or `$request->expectsJson()`). From 0.2, other requests get a `303` redirect to the watch page instead. The same fields, and nothing more, go into Inertia props, Livewire round trips and queued payloads.
 
@@ -106,5 +107,7 @@ Cursor-paginated direct children, oldest first, at most 100 per page. Only child
 | `429` | Polled faster than allowed; `Retry-After` is set. |
 
 ### Reserved codes
+
+- [x] Inline exceptions record `run.exception`, with an activity log entry of the same code and `params.exception` containing only the exception class name. Application transaction rollbacks record `run.rolled_back` ([#6](https://github.com/teylabs/docket/issues/6), unreleased).
 
 `run.failed` (an unkeyed job threw after its last try), `run.exception` (an exception left a `Docket::run()` closure; its class name is logged, never its message), `run.rolled_back` (the transaction around a `run()` or `dispatch()` rolled back), `run.child_failed` (a child's exception went uncaught out of the parent; `params.child` is the child's id), `run.loop_detected` (a continuation or child repeated earlier work exactly; `params.job` and `params.repeats`), `run.depth_exceeded` (a nested `run()` or `Docket::job()` would have exceeded `docket.max_depth`; `params.max_depth`), `run.stalled` (no report within `staleAfter`), `run.job_failed` (the item code when a keyed job threw after its last try). App codes are `area.reason` and must not start with `run.`.
