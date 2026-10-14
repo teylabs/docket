@@ -84,6 +84,7 @@ it('honours a replacement policy and rechecks revoked access before throttling',
 });
 
 it('limits snapshot polling per viewer and run with Retry-After without blocking related pages', function () {
+    freezeTime();
     Gate::policy(Run::class, ReadOnlyRunPolicy::class);
     config(['docket.poll_after_ms' => 2500]);
     $run = Run::create(['name' => 'poll']);
