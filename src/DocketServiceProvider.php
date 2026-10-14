@@ -22,6 +22,14 @@ class DocketServiceProvider extends ServiceProvider
     public function register(): void
     {
         $this->mergeConfigFrom(__DIR__.'/../config/docket.php', 'docket');
+
+        if (! $this->app->configurationIsCached()) {
+            $defaults = require __DIR__.'/../config/docket.php';
+            $this->app->make('config')->set('docket.routes', array_replace(
+                $defaults['routes'], $this->app->make('config')->array('docket.routes'),
+            ));
+        }
+
         $this->app->scoped(CurrentRun::class);
         $this->app->scoped(Tracking::class);
         $this->app->scoped(Transactions::class, fn ($app) => new Transactions($app->make('db.transactions')));

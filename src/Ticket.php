@@ -57,16 +57,20 @@ class Ticket implements Arrayable, JsonSerializable, Responsable
     /** @return array{schema_version: int, id: string, token: string, name: string, status: string, revision: int, poll_after_ms: int|null, links: array<string, string>} */
     public function toArray(): array
     {
-        $poll = url(trim(config()->string('docket.routes.prefix'), '/').'/runs/'.$this->token);
-        $links = ['poll' => $poll];
-        $run = $this->serializationRun ??= $this->run();
+        $links = [];
 
-        if (! $this->status->isFinished() && Gate::allows('cancel', $run)) {
-            $links['cancel'] = $poll.'/cancel';
-        }
+        if (config()->boolean('docket.routes.enabled')) {
+            $poll = url(trim(config()->string('docket.routes.prefix'), '/').'/runs/'.$this->token);
+            $links = ['poll' => $poll];
+            $run = $this->serializationRun ??= $this->run();
 
-        if (in_array($this->status, [RunStatus::Partial, RunStatus::Failed, RunStatus::Cancelled], true) && Gate::allows('retry', $run)) {
-            $links['retry'] = $poll.'/retry';
+            if (! $this->status->isFinished() && Gate::allows('cancel', $run)) {
+                $links['cancel'] = $poll.'/cancel';
+            }
+
+            if (in_array($this->status, [RunStatus::Partial, RunStatus::Failed, RunStatus::Cancelled], true) && Gate::allows('retry', $run)) {
+                $links['retry'] = $poll.'/retry';
+            }
         }
 
         return [
@@ -114,10 +118,12 @@ class Ticket implements Arrayable, JsonSerializable, Responsable
     public function toResponse($request): JsonResponse
     {
         $data = $this->toArray();
+        $headers = ['Cache-Control' => 'private, no-store'];
 
-        return new JsonResponse($data, $this->status->isFinished() ? 200 : 202, [
-            'Location' => $data['links']['poll'],
-            'Cache-Control' => 'private, no-store',
-        ]);
+        if (isset($data['links']['poll'])) {
+            $headers['Location'] = $data['links']['poll'];
+        }
+
+        return new JsonResponse($data, $this->status->isFinished() ? 200 : 202, $headers);
     }
 }

@@ -4,6 +4,7 @@
 
 ### Added
 
+- Preserve defaults under partial route configuration, omit ticket and snapshot route links when routes are disabled, and document SQLite transaction limits and database queue failure cleanup. (#31)
 - Find stored runs by read token with `Docket::find()`, correct the installation and fake response examples, and document shared SQLite in-memory connections for tests. (#29)
 - Add long-running worker hygiene and query-bound regression coverage, batch tree-log and ancestor fingerprint reads, and reuse each ticket's serialization run without caching permissions. (#13)
 - Add the runs, items and logs schema, models, status enums, `HasRuns`, progress value and v1 status snapshot on Docket's database connection. (#4)

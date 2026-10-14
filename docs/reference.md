@@ -4,6 +4,12 @@
 
 Namespace `Tey\Docket` unless noted. **0.x** = the milestone that ships it (see Part 5).
 
+Implemented for 0.1, unreleased (#31):
+
+- [x] Partial route configuration preserves unspecified defaults; middleware lists replace rather than merge, including an empty list.
+- [x] Disabled routes leave ticket and snapshot `links` empty and omit ticket response `Location`, without requiring a prefix or middleware. Other fields and HTTP statuses are unchanged.
+- [x] SQLite write-lock limits, after-commit database queue integration and application cleanup through `catch()` are documented below.
+
 Implemented for 0.1, unreleased ([#29](https://github.com/teylabs/docket/issues/29)):
 
 - [x] `Docket::find(string $token): ?Run` reads stored runs by token without checking access. Missing tokens return `null`; ids and names are not lookup keys. Expiry is enforced by package routes and pruning, not this model lookup.
@@ -124,6 +130,46 @@ Set both the application and Docket to the same named connection before migratio
 Use Laravel's `RefreshDatabase` in those tests and publish Docket's migrations as shown in the README. Both now use the same in-memory database. Setting this only in a test's `beforeEach` is too late when `RefreshDatabase` has already migrated.
 
 This is a testing configuration: sharing a connection also shares transactions, so Docket records do not survive an application rollback. Test rollback durability with independent connections instead. Leave `DOCKET_DB_CONNECTION` unset outside these tests to keep the default separate connection.
+
+### Transaction-Coupled Database Queues
+
+Commit application writes before dispatching when the database queue shares the application's database. For example, in a controller after validating and storing an upload:
+
+```php
+// app/Http/Controllers/UploadController.php
+use App\Jobs\ImportRows;
+use App\Models\Upload;
+use Illuminate\Support\Facades\DB;
+use Tey\Docket\Facades\Docket;
+use Tey\Docket\Run;
+
+// Inside store(), after storing the file as $path:
+// There must be no outer application transaction around this code.
+$upload = DB::transaction(fn () => Upload::create([
+    'path' => $path,
+    'status' => 'queued',
+]));
+
+try {
+    return Docket::job(new ImportRows($upload))
+        ->about($upload)
+        ->catch(static function (Run $run): void {
+            $run->subject?->update(['status' => 'failed']);
+        })
+        ->dispatch();
+} catch (\Throwable $exception) {
+    // Also cover failures before a run and its callbacks have been saved.
+    $upload->update(['status' => 'failed']);
+
+    throw $exception;
+}
+```
+
+The upload is committed before Docket saves its run or writes to the queue. A dispatch error cannot roll back that upload, so the outer `catch` marks it failed. The run's `catch()` handles later failures, including failure to enqueue a continuation through `add()`. Keep cleanup idempotent: both paths may run for an initial enqueue failure. If dispatch must be registered inside an outer transaction, put the entire Docket dispatch and its error cleanup in `DB::afterCommit()` instead; no ticket is available until that callback executes.
+
+With SQLite, the default separate Docket connection still writes to the same database file. An open application write transaction blocks it: starting a run or reporting progress, items or logs can deadlock or end with `database is locked`. Laravel's queue `after_commit` option only delays queue insertion; it does not delay Docket's run or reporting writes. In a job, finish the application write transaction before calling reporting methods or `add()`. If reporting must happen inside it, configure `docket.connection` to a separate database with Docket's migrations. Sharing the application's connection avoids the second writer but also rolls back Docket's records, so it is not a durable alternative.
+
+When `add()` enqueueing fails, Docket records `run.failed` and stops later deliveries from executing. A skipped delivery does not call the job's `failed()` hook. Synchronize application status and release application resources in the run's `catch()` callback, not solely in job failure hooks. As with other failures, final callbacks wait for already attached children to finish.
 
 ### Facade `Tey\Docket\Facades\Docket`
 

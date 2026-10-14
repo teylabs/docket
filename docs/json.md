@@ -4,6 +4,8 @@
 
 All timestamps are ISO 8601 UTC. Responses send `Cache-Control: private, no-store`.
 
+- [x] With `docket.routes.enabled = false`, snapshots and tickets retain `links` as an empty array (`"links": []` in JSON). All route links below are absent, even for authorized actions or runs with children. Ticket responses omit `Location`. All other fields, including `poll_after_ms`, and HTTP statuses are unchanged (#31, 0.1, unreleased).
+
 ### Snapshot (`GET /docket/runs/{token}`, `Run::toArray()`)
 
 - [x] `Run::toArray()` and Eloquent JSON serialization implement the v1 snapshot ([#4](https://github.com/teylabs/docket/issues/4), unreleased).

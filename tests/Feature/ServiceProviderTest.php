@@ -4,6 +4,7 @@ use Illuminate\Routing\RouteCollection;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Route;
 use Tey\Docket\DocketServiceProvider;
+use Tey\Docket\Http\RunRequest;
 use Tey\Docket\Run;
 use Tey\Docket\Tests\Fixtures\ReadOnlyRunPolicy;
 
@@ -22,6 +23,33 @@ it('boots the provider and merges the schema and snapshot config', function () {
             'routes' => ['enabled' => true, 'prefix' => 'docket', 'middleware' => ['web']],
         ]);
 });
+
+it('preserves unspecified route defaults and replaces middleware lists', function (array $overrides, array $expected) {
+    config(['docket' => ['routes' => $overrides, 'ttl' => 60]]);
+    (new DocketServiceProvider(app()))->register();
+
+    expect(config('docket.routes'))->toBe($expected)
+        ->and(config('docket.ttl'))->toBe(60)
+        ->and(config('docket.poll_after_ms'))->toBe(2000);
+
+    Route::setRoutes(new RouteCollection);
+    (new DocketServiceProvider(app()))->boot();
+    Route::getRoutes()->refreshNameLookups();
+    $route = Route::getRoutes()->getByName('docket.show');
+    if ($expected['enabled']) {
+        expect($route)->not->toBeNull()
+            ->and($route->uri())->toBe(trim($expected['prefix'].'/runs/{token}', '/'))
+            ->and($route->gatherMiddleware())->toBe([RunRequest::class, ...$expected['middleware']]);
+    } else {
+        expect($route)->toBeNull();
+    }
+})->with([
+    'disabled only' => [['enabled' => false], ['enabled' => false, 'prefix' => 'docket', 'middleware' => ['web']]],
+    'prefix only' => [['prefix' => 'api/work'], ['enabled' => true, 'prefix' => 'api/work', 'middleware' => ['web']]],
+    'middleware only' => [['middleware' => ['api']], ['enabled' => true, 'prefix' => 'docket', 'middleware' => ['api']]],
+    'empty middleware' => [['middleware' => []], ['enabled' => true, 'prefix' => 'docket', 'middleware' => []]],
+    'empty prefix' => [['prefix' => ''], ['enabled' => true, 'prefix' => '', 'middleware' => ['web']]],
+]);
 
 it('publishes the migration and configuration under their documented tags', function () {
     $migrations = DocketServiceProvider::pathsToPublish(DocketServiceProvider::class, 'docket-migrations');

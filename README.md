@@ -545,6 +545,8 @@ Docket::run('file.convert', function (Run $run) use ($file) {
 
 When `run()` finishes inside an open database transaction, the run stays `running` until the transaction commits, then becomes `succeeded`. If the transaction rolls back, the run is marked `failed` with `run.rolled_back`. Either way the record survives, because Docket writes on its own connection (`docket.connection`).
 
+SQLite permits only one writer: reporting through the default separate connection while an application write transaction is open can deadlock or fail with `database is locked`. Commit application writes before reporting, or use a separate Docket database. See the [transaction-coupled queue recipe](docs/reference.md#transaction-coupled-database-queues).
+
 ### The Current Run
 
 `Docket::current()` returns the innermost run whose work is executing right now, or `null` when there is none. It is set while a `Docket::run()` closure executes and while a `Docketable` job handles. Code deep inside the work can report without being passed the run:
@@ -653,6 +655,8 @@ Docket::job(new ExportList($filters))
 ```
 
 `then` runs when the run succeeds. `catch` runs once, when the run ends as failed (including `run.stalled`). `finally` runs on any finish: succeeded, partial, failed or cancelled.
+
+Synchronize your application's failed status in `catch()`, not only in the job's `failed()` hook. If `$run->add()` cannot enqueue work, Docket fails the run and skips later deliveries; those skipped jobs do not run their `failed()` hooks. See the [database queue recipe](docs/reference.md#transaction-coupled-database-queues) for cleanup.
 
 > [!NOTE]
 > `catch` differs from `Bus::batch()->catch()`, which runs on the first failed job. Docket's `catch` runs only when the whole run has failed.
@@ -1246,6 +1250,8 @@ php artisan vendor:publish --tag=docket-config
 | `routes.middleware` | `['web']` | Their middleware, for example `['api', 'auth:sanctum']`. |
 | `connection` | `null` | The database connection Docket writes runs on. `null` opens a separate connection to your default database, so records survive your transactions' rollbacks. |
 | `max_depth` | `10` | How deep runs may nest; a deeper `Docket::run()` or nested dispatch throws `run.depth_exceeded`. `null` turns the cap off. Use `->linkedTo()` to start fresh. |
+
+Partial `routes` overrides keep unspecified defaults. A supplied `middleware` list replaces the default list, including `[]`. With `routes.enabled = false`, tickets and snapshots keep `links` as an empty array (`[]` in JSON), without reading `routes.prefix` or `routes.middleware`. Ticket responses omit `Location`; their status, poll interval and other fields are unchanged. Register and authorize your own endpoints if clients need HTTP access.
 
 ## FAQ
 
