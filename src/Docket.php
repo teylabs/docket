@@ -12,7 +12,7 @@ class Docket
 {
     public function run(string|Closure $name, ?Closure $callback = null): Ticket
     {
-        return (new PendingRun('options', []))->run($name, $callback);
+        return $this->pending()->run($name, $callback);
     }
 
     public function current(): ?Run
@@ -22,19 +22,19 @@ class Docket
 
     public function job(object $job): PendingRun
     {
-        return new PendingRun('job', [$job]);
+        return $this->pending('job', [$job]);
     }
 
     /** @param iterable<object|array<object>> $jobs */
     public function batch(iterable $jobs): PendingRun
     {
-        return new PendingRun('batch', array_values(is_array($jobs) ? $jobs : iterator_to_array($jobs)));
+        return $this->pending('batch', array_values(is_array($jobs) ? $jobs : iterator_to_array($jobs)));
     }
 
     /** @param array<object> $jobs */
     public function chain(array $jobs): PendingRun
     {
-        return new PendingRun('chain', array_values($jobs));
+        return $this->pending('chain', array_values($jobs));
     }
 
     public function dispatch(object $job): Ticket
@@ -49,66 +49,72 @@ class Docket
 
     public function about(Model $subject): PendingRun
     {
-        return (new PendingRun('options', []))->about($subject);
+        return $this->pending()->about($subject);
     }
 
     public function by(?Authenticatable $user): PendingRun
     {
-        return (new PendingRun('options', []))->by($user);
+        return $this->pending()->by($user);
     }
 
     public function name(string $name): PendingRun
     {
-        return (new PendingRun('options', []))->name($name);
+        return $this->pending()->name($name);
     }
 
     public function linkedTo(Run|Ticket|null $run): PendingRun
     {
-        return (new PendingRun('options', []))->linkedTo($run);
+        return $this->pending()->linkedTo($run);
     }
 
     public function allowRepeat(): PendingRun
     {
-        return (new PendingRun('options', []))->allowRepeat();
+        return $this->pending()->allowRepeat();
     }
 
     public function unique(): PendingRun
     {
-        return (new PendingRun('options', []))->unique();
+        return $this->pending()->unique();
     }
 
     public function idempotencyKey(?string $key): PendingRun
     {
-        return (new PendingRun('options', []))->idempotencyKey($key);
+        return $this->pending()->idempotencyKey($key);
     }
 
     public function total(int $units): PendingRun
     {
-        return (new PendingRun('options', []))->total($units);
+        return $this->pending()->total($units);
     }
 
     public function staleAfter(int $seconds): PendingRun
     {
-        return (new PendingRun('options', []))->staleAfter($seconds);
+        return $this->pending()->staleAfter($seconds);
     }
 
     public function expiresAt(DateTimeInterface $time): PendingRun
     {
-        return (new PendingRun('options', []))->expiresAt($time);
+        return $this->pending()->expiresAt($time);
     }
 
     public function then(Closure $callback): PendingRun
     {
-        return (new PendingRun('options', []))->then($callback);
+        return $this->pending()->then($callback);
     }
 
     public function catch(Closure $callback): PendingRun
     {
-        return (new PendingRun('options', []))->catch($callback);
+        return $this->pending()->catch($callback);
     }
 
     public function finally(Closure $callback): PendingRun
     {
-        return (new PendingRun('options', []))->finally($callback);
+        return $this->pending()->finally($callback);
+    }
+
+    /** @param list<object|array<object>> $jobs */
+    protected function pending(string $source = 'options', array $jobs = []): PendingRun
+    {
+        return new PendingRun($source, $jobs);
     }
 }

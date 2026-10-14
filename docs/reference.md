@@ -48,7 +48,7 @@ Implemented for 0.1, unreleased ([#7](https://github.com/teylabs/docket/issues/7
 - [x] Structural limits: params have up to 20 string-keyed scalar/null entries and at most 4,096 encoded JSON bytes. Checkpoints are scalar/null or a flat array of scalar/null values, at most 4,096 encoded JSON bytes. Invalid values throw `InvalidArgumentException` before writing. The snapshot includes at most 20 newest item results.
 - [x] Loop protection for added work (#9).
 - [x] Creation of retries and checkpoint inheritance (#10).
-- [ ] `withFakeDocket()` (#11).
+- [x] `withFakeDocket()` (#11).
 
 Implemented for 0.1, unreleased ([#8](https://github.com/teylabs/docket/issues/8)):
 
@@ -255,6 +255,18 @@ The table in the README. Package JSON routes: 0.1. The watch page: 0.2. The exte
 `<x-docket-progress :run="$run" />` renders a `Run`, a `Ticket` or `null`. `{{ $ticket }}` renders the same component through `Htmlable`. The watch page (`docket::watch` view, published with `docket-views`) uses it too. 0.2.
 
 ### Fake (`Docket::fake()` → `Tey\Docket\Testing\DocketFake`)
+
+Implemented for 0.1, unreleased ([#11](https://github.com/teylabs/docket/issues/11)):
+
+- [x] Dispatch, batch, chain and inline assertions, including counts, callbacks and negative assertions.
+- [x] Inline closures execute with `Tey\Docket\Testing\FakeRun` as the current run; nested calls restore their parent even on exceptions. Results stay on the returned ticket only.
+- [x] `FakeRun` reporting assertions and `Docketable::withFakeDocket()`, including a keyed job's default item key, without database writes or queueing.
+
+The fake records dispatch requests, including `dispatchSync()`, without executing jobs. Inline runs and dispatches have separate assertion histories; `assertNothingDispatched()` does not reject inline runs. A new `fake()` starts a fresh history. Chain assertions compare ordered classes or job instances and their properties.
+
+The fake does not simulate lifecycle completion, callbacks, deduplication, retries, pruning or tree roll-up. Inline fake tickets stay `running`; dispatch tickets are `queued`. Ticket JSON keeps the normal fields, without reports or results. `withFakeDocket()` attaches the fake to the job, not to the global current-run stack: calling a job's `handle()` directly has no execution boundary Docket can wrap. Use a faked `Docket::run()` when the code under test needs `Docket::current()`.
+
+Reporting assertions match recorded values, not just the latest value. Optional item codes and log params narrow the match; omitted values match any code or params. Params and checkpoints use strict value matching. `assertAdded()` accepts a job class or a predicate receiving each added job. `track()` keeps the normal eager/lazy declaration, succeeded-key skipping, implicit success and unsettled-on-break behaviour. The first item outcome wins. `fail()` records the code and throws `RunFailed`, so code after failure does not execute; catch it in a direct job unit test before asserting the report.
 
 | Signature | Meaning | Ms |
 | --- | --- | --- |
