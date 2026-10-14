@@ -4,6 +4,11 @@
 
 Namespace `Tey\Docket` unless noted. **0.x** = the milestone that ships it (see Part 5).
 
+Implemented for 0.1, unreleased ([#29](https://github.com/teylabs/docket/issues/29)):
+
+- [x] `Docket::find(string $token): ?Run` reads stored runs by token without checking access. Missing tokens return `null`; ids and names are not lookup keys. Expiry is enforced by package routes and pruning, not this model lookup.
+- [x] Installation lists all five tables, the fake upload example asserts the 0.1 JSON response, and the SQLite `:memory:` testing recipe uses an explicit shared connection.
+
 Implemented for 0.1, unreleased ([#13](https://github.com/teylabs/docket/issues/13)):
 
 - [x] Stack unwinding on return, exceptions and `fail()`, queue exit resets, and Octane request, task and tick boundary resets.
@@ -97,7 +102,28 @@ Cancellation stops at the next safe point, preserving completed items. Inline ex
 
 An explicit name passed to `run()` takes precedence over `name()`; the closure-only form keeps `name()` or defaults to `closure`. A reused unique or idempotent run does not execute the closure again and cannot recover an earlier in-process result. An exception failure is final and is not replaced by a later rollback.
 
-With `connection => null`, Docket opens a separate connection using the default database's configuration. SQLite `:memory:` databases belong to one connection, so use file-backed SQLite when application and Docket records need to share a database. SQLite also permits only one writer at a time; use a separate Docket database if the application must hold a write transaction while Docket writes, including native synchronous batches that report items or logs.
+With `connection => null`, Docket opens a separate connection using the default database's configuration. SQLite `:memory:` databases belong to one connection, so use file-backed SQLite when application and Docket records need to share a database through independent connections. For tests that share one connection, see the recipe below. SQLite also permits only one writer at a time; use a separate Docket database if the application must hold a write transaction while Docket writes, including native synchronous batches that report items or logs.
+
+### Testing With SQLite In Memory
+
+After publishing `docket-config`, make its connection configurable in your application's `config/docket.php`:
+
+```php
+// config/docket.php, inside the returned array
+'connection' => env('DOCKET_DB_CONNECTION'),
+```
+
+Set both the application and Docket to the same named connection before migrations run. Add these entries to the `<php>` section of your application's `phpunit.xml`:
+
+```xml
+<env name="DB_CONNECTION" value="sqlite"/>
+<env name="DB_DATABASE" value=":memory:"/>
+<env name="DOCKET_DB_CONNECTION" value="sqlite"/>
+```
+
+Use Laravel's `RefreshDatabase` in those tests and publish Docket's migrations as shown in the README. Both now use the same in-memory database. Setting this only in a test's `beforeEach` is too late when `RefreshDatabase` has already migrated.
+
+This is a testing configuration: sharing a connection also shares transactions, so Docket records do not survive an application rollback. Test rollback durability with independent connections instead. Leave `DOCKET_DB_CONNECTION` unset outside these tests to keep the default separate connection.
 
 ### Facade `Tey\Docket\Facades\Docket`
 

@@ -96,7 +96,7 @@ composer require tey/docket
 
 php artisan vendor:publish --tag=docket-migrations
 php artisan migrate
-# -> creates docket_runs, docket_items and docket_logs
+# -> creates docket_runs, docket_items, docket_logs, docket_work and docket_fingerprints
 ```
 
 Inline runs need no queue. Queued runs work with any queue driver that runs jobs in the background, including `database`. See [Before Production](#before-production) for the scheduled command Docket needs.
@@ -1183,11 +1183,14 @@ it('imports an upload', function () {
 
     $this->actingAs($user = User::factory()->create())
         ->post(route('uploads.store'), ['file' => UploadedFile::fake()->create('rows.csv')])
-        ->assertRedirect();
+        ->assertAccepted()
+        ->assertJsonPath('status', 'queued');
 
     Docket::assertDispatched(ImportRows::class, fn (PendingRun $run) => $run->subject->user->is($user));
 });
 ```
+
+In 0.1, tickets always return JSON, including for form posts. Browser redirects arrive with the 0.2 watch page. For SQLite `:memory:` tests, configure a shared connection as shown in [the testing recipe](docs/reference.md#testing-with-sqlite-in-memory).
 
 ```php
 Docket::assertBatched(fn (PendingRun $run) => $run->name === 'units.build');

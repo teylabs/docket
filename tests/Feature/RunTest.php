@@ -4,8 +4,10 @@ use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\QueryException;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
+use Tey\Docket\Facades\Docket;
 use Tey\Docket\Item;
 use Tey\Docket\ItemStatus;
 use Tey\Docket\Log;
@@ -14,6 +16,35 @@ use Tey\Docket\RunStatus;
 use Tey\Docket\Tests\Fixtures\Document;
 use Tey\Docket\Tests\Fixtures\Upload;
 use Tey\Docket\Tests\Fixtures\User;
+
+it('finds stored runs by token without checking access or expiry', function (RunStatus $status) {
+    $run = Run::create([
+        'name' => 'rows.import',
+        'status' => $status,
+        'expires_at' => now()->subDay(),
+    ]);
+    Run::create(['name' => 'rows.import']);
+
+    expect(Gate::allows('view', $run))->toBeFalse();
+
+    $found = Docket::find($run->token);
+
+    expect($found?->is($run))->toBeTrue()
+        ->and($found?->status)->toBe($status);
+})->with(RunStatus::cases());
+
+it('returns null for missing tokens rather than looking up ids or names', function () {
+    $run = Run::create(['name' => 'rows.import']);
+
+    expect(Docket::find('missing'))->toBeNull()
+        ->and(Docket::find(''))->toBeNull()
+        ->and(Docket::find($run->id))->toBeNull()
+        ->and(Docket::find($run->name))->toBeNull();
+
+    $run->delete();
+
+    expect(Docket::find($run->token))->toBeNull();
+});
 
 it('creates ULIDs and independent cryptographically random tokens with database uniqueness', function () {
     $first = Run::create(['name' => 'rows.import']);
