@@ -469,9 +469,11 @@ it('keeps one worker stack empty and memory flat across one thousand jobs after 
     for ($index = 1; $index <= 1100; $index++) {
         Docket::job(new ReportingWork('unit:'.$index))->dispatch();
         $worker->runNextJob('database', 'default', $options);
-        expect(Docket::current())->toBeNull()->and($current?->get())->toBeNull();
+        expect(Docket::current())->toBeNull();
+        // Framework model cycles may await collection even after all owners release them.
+        gc_collect_cycles();
+        expect($current?->get())->toBeNull();
         if ($index >= 100 && $index % 100 === 0) {
-            gc_collect_cycles();
             $samples[] = memory_get_usage();
         }
     }
