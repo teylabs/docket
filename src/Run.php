@@ -2,6 +2,7 @@
 
 namespace Tey\Docket;
 
+use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Casts\Attribute;
 use Illuminate\Database\Eloquent\Concerns\HasUlids;
@@ -47,6 +48,13 @@ use Tey\Docket\Reporting\ReportsWork;
  * @property int $children_succeeded
  * @property int $children_partial
  * @property int $children_failed
+ * @property bool $detached
+ * @property RunStatus|null $completion_status
+ * @property int $children_done
+ * @property int $children_units
+ * @property int $attached_children
+ * @property int $pending_children
+ * @property int $unsuccessful_children
  * @property Carbon $created_at
  * @property Carbon $updated_at
  * @property Carbon|null $finished_at
@@ -75,6 +83,12 @@ class Run extends Model
         'children_succeeded' => 0,
         'children_partial' => 0,
         'children_failed' => 0,
+        'detached' => false,
+        'children_done' => 0,
+        'children_units' => 0,
+        'attached_children' => 0,
+        'pending_children' => 0,
+        'unsuccessful_children' => 0,
     ];
 
     /** @internal */
@@ -105,6 +119,13 @@ class Run extends Model
             'result' => 'string',
             'total_explicit' => 'boolean',
             'dispatch_sync' => 'boolean',
+            'detached' => 'boolean',
+            'completion_status' => RunStatus::class,
+            'children_done' => 'integer',
+            'children_units' => 'integer',
+            'attached_children' => 'integer',
+            'pending_children' => 'integer',
+            'unsuccessful_children' => 'integer',
             'done' => 'integer',
             'total' => 'integer',
             'succeeded_count' => 'integer',
@@ -187,6 +208,18 @@ class Run extends Model
         return $this->hasMany(self::class, 'parent_run_id');
     }
 
+    /** @return Collection<int, Run> */
+    public function descendants(): Collection
+    {
+        return app(Trees\Traversal::class)->descendants($this);
+    }
+
+    /** @return array<string, mixed> */
+    public function tree(?Authenticatable $viewer = null): array
+    {
+        return app(Trees\Traversal::class)->tree($this, $viewer ?? auth()->user());
+    }
+
     /** @return HasMany<Item, $this> */
     public function items(): HasMany
     {
@@ -209,7 +242,10 @@ class Run extends Model
     /** @return Attribute<Progress, never> */
     protected function progress(): Attribute
     {
-        return Attribute::get(fn () => new Progress($this->done, $this->total));
+        return Attribute::get(fn () => new Progress(
+            $this->done + $this->children_done,
+            $this->total === null && $this->attached_children === 0 ? null : ($this->total ?? 0) + $this->children_units,
+        ));
     }
 
     public function finished(): bool
@@ -304,7 +340,7 @@ class Run extends Model
                 'failed' => $this->failed_count,
                 'skipped' => $this->skipped_count,
             ],
-            'error' => $this->error === null ? null : ['code' => $this->error['code'], 'params' => (object) $this->error['params']],
+            'error' => $this->error === null || ! $this->failed() ? null : ['code' => $this->error['code'], 'params' => (object) $this->error['params']],
             'result' => $this->result,
             'partial' => $this->items()->whereNotNull('result')->orderByDesc('finished_at')->orderByDesc('id')->limit(20)
                 ->get(['key', 'result'])->map(fn (Item $item) => ['key' => $item->key, 'result' => $item->result])->all(),

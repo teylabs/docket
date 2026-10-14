@@ -8,6 +8,7 @@ use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Queue\Jobs\SyncJob;
+use Throwable;
 use WeakMap;
 
 /** @internal */
@@ -19,9 +20,13 @@ class CurrentRun
     /** @var WeakMap<object, list<Run>> */
     private WeakMap $suspended;
 
+    /** @var WeakMap<Throwable, array{parent: string, child: string}> */
+    private WeakMap $failures;
+
     public function __construct()
     {
         $this->suspended = new WeakMap;
+        $this->failures = new WeakMap;
     }
 
     public function current(): ?Run
@@ -44,6 +49,21 @@ class CurrentRun
     {
         $this->stack = [];
         $this->suspended = new WeakMap;
+        $this->failures = new WeakMap;
+    }
+
+    public function failedChild(Throwable $exception, Run $child): void
+    {
+        if ($child->parent_run_id !== null && ! $child->detached) {
+            $this->failures[$exception] = ['parent' => $child->parent_run_id, 'child' => $child->id];
+        }
+    }
+
+    public function failureChild(Throwable $exception, Run $parent): ?string
+    {
+        $failure = $this->failures[$exception] ?? null;
+
+        return $failure !== null && $failure['parent'] === $parent->id ? $failure['child'] : null;
     }
 
     public function processing(JobProcessing $event): void

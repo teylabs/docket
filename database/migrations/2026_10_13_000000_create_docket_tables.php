@@ -31,6 +31,13 @@ return new class extends Migration
             $table->unsignedBigInteger('total')->nullable();
             $table->boolean('total_explicit')->default(false);
             $table->boolean('dispatch_sync')->default(false);
+            $table->boolean('detached')->default(false);
+            $table->string('completion_status')->nullable();
+            $table->unsignedBigInteger('children_done')->default(0);
+            $table->unsignedBigInteger('children_units')->default(0);
+            $table->unsignedBigInteger('attached_children')->default(0);
+            $table->unsignedBigInteger('pending_children')->default(0);
+            $table->unsignedBigInteger('unsuccessful_children')->default(0);
             $table->unsignedBigInteger('succeeded_count')->default(0);
             $table->unsignedBigInteger('failed_count')->default(0);
             $table->unsignedBigInteger('skipped_count')->default(0);

@@ -8,7 +8,8 @@ All timestamps are ISO 8601 UTC. Responses send `Cache-Control: private, no-stor
 
 - [x] `Run::toArray()` and Eloquent JSON serialization implement the v1 snapshot ([#4](https://github.com/teylabs/docket/issues/4), unreleased).
 - [x] Reporting updates progress, item counts, step, results and revision; `partial` stays bounded to the newest 20 item references. Checkpoints never enter the snapshot or ticket ([#7](https://github.com/teylabs/docket/issues/7), unreleased). Structural limits are listed in [the reference](reference.md).
-- [ ] HTTP routes, response headers and automatic tree roll-up. Child counts currently read persisted counters; action links use the application's Gate abilities.
+- [x] Automatic tree progress/status roll-up, parent/root ids, direct-child counts and conditional `links.children` ([#8](https://github.com/teylabs/docket/issues/8), unreleased). Detached children remain in child counts but not rolled-up progress or status.
+- [ ] HTTP routes and response headers. Action links use the application's Gate abilities.
 
 | Field | Type | Null | Meaning |
 | --- | --- | --- | --- |
@@ -73,6 +74,9 @@ At most 100 per page. `status` filter: `pending`, `succeeded`, `failed`, `skippe
 
 ### Children page (`links.children`)
 
+- [x] `Run::tree($viewer)` exposes policy-filtered nested nodes with progress, counts and `latest_log` (#8).
+- [ ] The cursor-paginated children HTTP page (#12). Tickets themselves still contain only the ticket fields above.
+
 Cursor-paginated direct children, oldest first, at most 100 per page. Only children the viewer may `view` are listed; the parent's `children` counts still cover all of them. Each entry is the child's ticket plus what a tree view needs:
 
 ```json
@@ -110,5 +114,6 @@ Cursor-paginated direct children, oldest first, at most 100 per page. Only child
 ### Reserved codes
 
 - [x] Inline exceptions record `run.exception`, with an activity log entry of the same code and `params.exception` containing only the exception class name. Application transaction rollbacks record `run.rolled_back` ([#6](https://github.com/teylabs/docket/issues/6), unreleased).
+- [x] Uncaught child exceptions record `run.child_failed`, with `params.child` naming the direct child (#8). The snapshot exposes the error when the parent reaches `failed`, after its attached children finish.
 
 `run.failed` (an unkeyed job threw after its last try), `run.exception` (an exception left a `Docket::run()` closure; its class name is logged, never its message), `run.rolled_back` (the transaction around a `run()` or `dispatch()` rolled back), `run.child_failed` (a child's exception went uncaught out of the parent; `params.child` is the child's id), `run.loop_detected` (a continuation or child repeated earlier work exactly; `params.job` and `params.repeats`), `run.depth_exceeded` (a nested `run()` or `Docket::job()` would have exceeded `docket.max_depth`; `params.max_depth`), `run.stalled` (no report within `staleAfter`), `run.job_failed` (the item code when a keyed job threw after its last try). App codes are `area.reason` and must not start with `run.`.

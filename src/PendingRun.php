@@ -11,6 +11,8 @@ use InvalidArgumentException;
 use Laravel\SerializableClosure\SerializableClosure;
 use Tey\Docket\Dispatch\Dispatcher;
 use Tey\Docket\Dispatch\Transactions;
+use Tey\Docket\Trees\RollUp;
+use Throwable;
 
 /** @api */
 class PendingRun
@@ -25,6 +27,8 @@ class PendingRun
     public array $jobs;
 
     private bool $isUnique = false;
+
+    private bool $isDetached = false;
 
     private ?string $key = null;
 
@@ -144,6 +148,13 @@ class PendingRun
         return $this->start(false);
     }
 
+    public function detached(): static
+    {
+        $this->isDetached = true;
+
+        return $this;
+    }
+
     public function dispatchSync(): Ticket
     {
         return $this->start(true);
@@ -195,6 +206,7 @@ class PendingRun
                     'total' => $this->units ?? $this->declaredTotal(),
                     'total_explicit' => $this->units !== null,
                     'dispatch_sync' => $callback === null && $sync,
+                    'detached' => $this->isDetached,
                     'stale_after' => $this->staleSeconds ?? ($this->source === 'job' ? ($this->jobs[0]->timeout ?? null) : null) ?? config('docket.stale_after'),
                     'expires_at' => $this->expiry,
                     'unique_key' => $unique,
@@ -208,7 +220,11 @@ class PendingRun
                 }
 
                 $run->initiator()->associate($this->initiator);
+                $parent = app(CurrentRun::class)->current();
+                $run->parent_run_id = $parent?->id;
+                $run->root_run_id = $parent === null ? null : ($parent->root_run_id ?? $parent->id);
                 $run->save();
+                app(RollUp::class)->changed(null, $run);
 
                 return $run;
             }, 5);
@@ -222,13 +238,19 @@ class PendingRun
             return $run->ticket();
         }
 
-        if ($callback !== null) {
-            return app(InlineRunner::class)->execute($run, $callback);
-        }
+        try {
+            if ($callback !== null) {
+                return app(InlineRunner::class)->execute($run, $callback);
+            }
 
-        $jobs = $this->jobs;
-        $source = $this->source;
-        app(Transactions::class)->dispatch($run->id, static fn () => app(Dispatcher::class)->enqueue($run, $source, $jobs, $sync));
+            $jobs = $this->jobs;
+            $source = $this->source;
+            app(Transactions::class)->dispatch($run->id, static fn () => app(Dispatcher::class)->enqueue($run, $source, $jobs, $sync));
+        } catch (Throwable $exception) {
+            app(CurrentRun::class)->failedChild($exception, $run);
+
+            throw $exception;
+        }
 
         return $run->refresh()->ticket();
     }

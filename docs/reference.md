@@ -13,7 +13,7 @@ Implemented for 0.1, unreleased ([#4](https://github.com/teylabs/docket/issues/4
 - [x] `Progress` (`done`, `total`, `percent` and its string form).
 - [x] Reporting methods (#7).
 - [ ] Cancel and retry control methods (#10).
-- [ ] Tree traversal and automatic progress/status roll-up; the persisted counters are ready for these updates.
+- [x] Tree traversal and automatic progress/status roll-up (#8).
 - [ ] Package routes and the default policy.
 
 Implemented for 0.1, unreleased ([#5](https://github.com/teylabs/docket/issues/5)):
@@ -33,7 +33,8 @@ Implemented for 0.1, unreleased ([#6](https://github.com/teylabs/docket/issues/6
 - [x] Exceptions record `run.exception` and log only the class, then rethrow unchanged. Inline `Run::fail()` throws `RunFailed` with the supplied code and params.
 - [x] Inline work executes immediately inside an application transaction; successful completion waits for commit, and rollback records `run.rolled_back` on Docket's connection.
 - [x] `Docket::current()` uses a scoped stack that unwinds in `finally`, with queue exit resets and Octane request, task and tick boundary resets. Synchronous queue work restores its caller's stack.
-- [ ] Parent/child persistence and roll-up (#8), depth and loop protection (#9), and progress bars (0.2). Nested inline calls currently restore the stack but do not form a stored tree.
+- [x] Parent/child persistence and roll-up (#8).
+- [ ] Depth and loop protection (#9), and progress bars (0.2).
 
 Implemented for 0.1, unreleased ([#7](https://github.com/teylabs/docket/issues/7)):
 
@@ -45,6 +46,16 @@ Implemented for 0.1, unreleased ([#7](https://github.com/teylabs/docket/issues/7
 - [x] Added work keeps its run open, queues after commit, and runs synchronously under `dispatchSync()`. Internal `docket_work` records make completion safe to repeat without storing jobs in memory.
 - [x] Structural limits: params have up to 20 string-keyed scalar/null entries and at most 4,096 encoded JSON bytes. Checkpoints are scalar/null or a flat array of scalar/null values, at most 4,096 encoded JSON bytes. Invalid values throw `InvalidArgumentException` before writing. The snapshot includes at most 20 newest item results.
 - [ ] `withFakeDocket()` (#11), creation of retries and checkpoint inheritance (#10), and loop protection for added work (#9).
+
+Implemented for 0.1, unreleased ([#8](https://github.com/teylabs/docket/issues/8)):
+
+- [x] Nested inline runs and Docket dispatches persist their parent and root, with independent tickets. `parent()`, `root()`, `children()` and breadth-first `descendants()` read the tree.
+- [x] `tree($viewer)` returns the documented node fields, policy-filtered, with the latest log and no item content. An inaccessible root returns `[]`; an inaccessible child and its branch are omitted. Traversal respects `docket.max_depth` (default 10; `null` is unlimited).
+- [x] Progress sums the run's own units and attached children's progress. An unknown-total child contributes 0 of 1 until finished, then 1 of 1. Direct-child counts include detached children; item counts remain local to each run.
+- [x] Ancestor counters use atomic increments in one O(depth) walk per progress update, without querying siblings or holding locks while child work executes.
+- [x] Parents wait for attached children before completion callbacks and `RunFinished`. Caught or queued child failures make the parent partial; an uncaught child exception is rethrown unchanged and records `run.child_failed` with the direct child's id. A pending failure is preserved while other children finish.
+- [x] `PendingRun::detached()` keeps the child listed but excludes its progress and status from the parent's roll-up. Cancelled children count only in `children.total` and do not make a parent partial.
+- [ ] Depth enforcement, linked top-level runs and loop rescue (#9); children HTTP pages and the default policy (#12); tree UI and console watchers (0.2).
 
 `track()` skips succeeded keys, as specified in the README, not every terminal outcome. Arrays and eager collections declare immediately even when the returned generator is not iterated. Lazy inputs declare only as reached and do not infer a total. An explicit `total()` wins over inferred totals. The optional key in `itemFailed()` and `itemSkipped()` requires a PHP default for the following code parameter; omitting the code is rejected by validation. Success codes such as `created` are accepted, along with dotted codes; `run.` is reserved. Item result references accept strings or integer ids and are stored as strings.
 
