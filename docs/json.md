@@ -9,6 +9,7 @@ All timestamps are ISO 8601 UTC. Responses send `Cache-Control: private, no-stor
 - [x] `Run::toArray()` and Eloquent JSON serialization implement the v1 snapshot ([#4](https://github.com/teylabs/docket/issues/4), unreleased).
 - [x] Reporting updates progress, item counts, step, results and revision; `partial` stays bounded to the newest 20 item references. Checkpoints never enter the snapshot or ticket ([#7](https://github.com/teylabs/docket/issues/7), unreleased). Structural limits are listed in [the reference](reference.md).
 - [x] Automatic tree progress/status roll-up, parent/root ids, direct-child counts and conditional `links.children` ([#8](https://github.com/teylabs/docket/issues/8), unreleased). Detached children remain in child counts but not rolled-up progress or status.
+- [x] `linkedTo()` populates `linked_from_run_id` on a new root without changing the original's counters or status ([#9](https://github.com/teylabs/docket/issues/9), unreleased). Fingerprints and work input are never snapshot or ticket fields.
 - [ ] HTTP routes and response headers. Action links use the application's Gate abilities.
 
 | Field | Type | Null | Meaning |
@@ -115,5 +116,6 @@ Cursor-paginated direct children, oldest first, at most 100 per page. Only child
 
 - [x] Inline exceptions record `run.exception`, with an activity log entry of the same code and `params.exception` containing only the exception class name. Application transaction rollbacks record `run.rolled_back` ([#6](https://github.com/teylabs/docket/issues/6), unreleased).
 - [x] Uncaught child exceptions record `run.child_failed`, with `params.child` naming the direct child (#8). The snapshot exposes the error when the parent reaches `failed`, after its attached children finish.
+- [x] Depth failures record `run.depth_exceeded` with `params.max_depth`; exact repeats record `run.loop_detected` with `params.job` and `params.repeats` (#9). For recursion, `repeats` is the ancestor run id; for continuation, it is the first work id. The loop event's `repeats` is the run that owns that work. Caught child failures roll up as partial; uncaught ones become `run.child_failed` on the parent.
 
 `run.failed` (an unkeyed job threw after its last try), `run.exception` (an exception left a `Docket::run()` closure; its class name is logged, never its message), `run.rolled_back` (the transaction around a `run()` or `dispatch()` rolled back), `run.child_failed` (a child's exception went uncaught out of the parent; `params.child` is the child's id), `run.loop_detected` (a continuation or child repeated earlier work exactly; `params.job` and `params.repeats`), `run.depth_exceeded` (a nested `run()` or `Docket::job()` would have exceeded `docket.max_depth`; `params.max_depth`), `run.stalled` (no report within `staleAfter`), `run.job_failed` (the item code when a keyed job threw after its last try). App codes are `area.reason` and must not start with `run.`.

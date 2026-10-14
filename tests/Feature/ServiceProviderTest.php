@@ -10,6 +10,7 @@ it('boots the provider and merges the schema and snapshot config', function () {
             'ttl' => 86400,
             'stale_after' => 3600,
             'poll_after_ms' => 2000,
+            'max_depth' => 10,
             'routes' => ['prefix' => 'docket'],
         ]);
 });

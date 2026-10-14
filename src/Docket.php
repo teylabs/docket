@@ -62,6 +62,16 @@ class Docket
         return (new PendingRun('options', []))->name($name);
     }
 
+    public function linkedTo(Run|Ticket|null $run): PendingRun
+    {
+        return (new PendingRun('options', []))->linkedTo($run);
+    }
+
+    public function allowRepeat(): PendingRun
+    {
+        return (new PendingRun('options', []))->allowRepeat();
+    }
+
     public function unique(): PendingRun
     {
         return (new PendingRun('options', []))->unique();

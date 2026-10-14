@@ -12,8 +12,8 @@ class Work
 {
     public function reserve(Run $run): string
     {
-        if ($run->finished()) {
-            throw new LogicException('Cannot add work to a finished run.');
+        if ($run->finished() || $run->completion_status !== null) {
+            throw new LogicException('Cannot add work to a finished or stopping run.');
         }
 
         $id = (string) Str::ulid();

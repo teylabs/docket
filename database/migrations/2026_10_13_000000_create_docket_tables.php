@@ -72,6 +72,13 @@ return new class extends Migration
             $table->index(['run_id', 'completed']);
         });
 
+        $schema->create('docket_fingerprints', function (Blueprint $table) {
+            $table->foreignUlid('run_id')->constrained('docket_runs')->cascadeOnDelete();
+            $table->string('fingerprint', 64);
+            $table->ulid('work_id')->nullable();
+            $table->primary(['run_id', 'fingerprint']);
+        });
+
         $schema->create('docket_items', function (Blueprint $table) {
             $table->id();
             $table->foreignUlid('run_id')->constrained('docket_runs')->cascadeOnDelete();
@@ -103,6 +110,7 @@ return new class extends Migration
         $schema = Schema::connection($this->getConnection());
         $schema->dropIfExists('docket_logs');
         $schema->dropIfExists('docket_items');
+        $schema->dropIfExists('docket_fingerprints');
         $schema->dropIfExists('docket_work');
         $schema->dropIfExists('docket_runs');
     }
