@@ -28,7 +28,7 @@ class Marker
         $run = app(CurrentRun::class)->current() ?? Run::findOrFail($this->runId);
         $run->reportingKey = $this->itemKey;
 
-        if ($run->failed() || $run->cancelled() || ($this->itemKey !== null && app(Reporter::class)->succeeded($run, $this->itemKey))) {
+        if ($run->failed() || $run->cancelled() || $run->completion_status !== null || ($this->itemKey !== null && app(Reporter::class)->succeeded($run, $this->itemKey))) {
             return null;
         }
 
@@ -37,7 +37,10 @@ class Marker
 
             return $next($job);
         } catch (RunFailed $exception) {
-            app(Lifecycle::class)->finish($run->id, RunStatus::Failed, ['code' => $exception->failureCode, 'params' => $exception->params]);
+            $child = app(CurrentRun::class)->failureChild($exception, $run);
+            app(Lifecycle::class)->finish($run->id, RunStatus::Failed, $child === null
+                ? ['code' => $exception->failureCode, 'params' => $exception->params]
+                : ['code' => 'run.child_failed', 'params' => ['child' => $child]]);
 
             if (method_exists($job, 'batch')) {
                 $job->batch()?->cancel();

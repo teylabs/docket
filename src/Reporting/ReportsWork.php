@@ -164,9 +164,9 @@ trait ReportsWork
     }
 
     /** @param object|iterable<object|array<object>> $jobs */
-    public function add(object|iterable $jobs): static
+    public function add(object|iterable $jobs, bool $allowRepeat = false): static
     {
-        app(Dispatcher::class)->add($this, is_iterable($jobs) ? array_values([...$jobs]) : [$jobs]);
+        app(Dispatcher::class)->add($this, is_iterable($jobs) ? array_values([...$jobs]) : [$jobs], $allowRepeat);
 
         return $this;
     }

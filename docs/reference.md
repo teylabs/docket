@@ -34,7 +34,8 @@ Implemented for 0.1, unreleased ([#6](https://github.com/teylabs/docket/issues/6
 - [x] Inline work executes immediately inside an application transaction; successful completion waits for commit, and rollback records `run.rolled_back` on Docket's connection.
 - [x] `Docket::current()` uses a scoped stack that unwinds in `finally`, with queue exit resets and Octane request, task and tick boundary resets. Synchronous queue work restores its caller's stack.
 - [x] Parent/child persistence and roll-up (#8).
-- [ ] Depth and loop protection (#9), and progress bars (0.2).
+- [x] Depth and loop protection (#9).
+- [ ] Progress bars (0.2).
 
 Implemented for 0.1, unreleased ([#7](https://github.com/teylabs/docket/issues/7)):
 
@@ -45,7 +46,8 @@ Implemented for 0.1, unreleased ([#7](https://github.com/teylabs/docket/issues/7
 - [x] `total()`, `step()`, `log()`, `result()`, `checkpoint()`, `add()`, queued `fail()` and `throwIfCancelled()`.
 - [x] Added work keeps its run open, queues after commit, and runs synchronously under `dispatchSync()`. Internal `docket_work` records make completion safe to repeat without storing jobs in memory.
 - [x] Structural limits: params have up to 20 string-keyed scalar/null entries and at most 4,096 encoded JSON bytes. Checkpoints are scalar/null or a flat array of scalar/null values, at most 4,096 encoded JSON bytes. Invalid values throw `InvalidArgumentException` before writing. The snapshot includes at most 20 newest item results.
-- [ ] `withFakeDocket()` (#11), creation of retries and checkpoint inheritance (#10), and loop protection for added work (#9).
+- [x] Loop protection for added work (#9).
+- [ ] `withFakeDocket()` (#11), creation of retries and checkpoint inheritance (#10).
 
 Implemented for 0.1, unreleased ([#8](https://github.com/teylabs/docket/issues/8)):
 
@@ -55,7 +57,19 @@ Implemented for 0.1, unreleased ([#8](https://github.com/teylabs/docket/issues/8
 - [x] Ancestor counters use atomic increments in one O(depth) walk per progress update, without querying siblings or holding locks while child work executes.
 - [x] Parents wait for attached children before completion callbacks and `RunFinished`. Caught or queued child failures make the parent partial; an uncaught child exception is rethrown unchanged and records `run.child_failed` with the direct child's id. A pending failure is preserved while other children finish.
 - [x] `PendingRun::detached()` keeps the child listed but excludes its progress and status from the parent's roll-up. Cancelled children count only in `children.total` and do not make a parent partial.
-- [ ] Depth enforcement, linked top-level runs and loop rescue (#9); children HTTP pages and the default policy (#12); tree UI and console watchers (0.2).
+- [x] Depth enforcement, linked top-level runs and loop rescue (#9).
+- [ ] Children HTTP pages and the default policy (#12); tree UI and console watchers (0.2).
+
+Implemented for 0.1, unreleased ([#9](https://github.com/teylabs/docket/issues/9)):
+
+- [x] `docket.max_depth` defaults to 10; roots are depth 0 and `null` removes the cap. A rejected child is recorded as `run.depth_exceeded` with `params.max_depth`, without executing or queueing its work.
+- [x] `linkedTo(Run|Ticket|null)` starts a separate root, with `linked_from_run_id`, `linked()` and `linkedFrom()`. Linked work never contributes to the original's progress, status or completion; `null` is a no-op.
+- [x] Durable fingerprints detect exact ancestor recursion and repeated additions, including repeats within one `add()` call. Job keys take precedence; otherwise fingerprints use the class and normalized serialized input. Inline fingerprints use the name and closure file/line.
+- [x] `allowRepeat()` and `add($jobs, allowRepeat: true)` allow deliberate repeats. Succeeded item keys are still skipped. Queue attempts and releases do not register new work; retry lineage does not share fingerprint history.
+- [x] `run.loop_detected` records `params.job` and `params.repeats` (the ancestor run id or first work id). `Events\LoopDetected` supplies the failed branch, the repeated run and the fingerprint, with a stable event id; the exception is reported to Laravel.
+- [ ] Forward snapshot links to linked runs: the accepted JSON contract and route table do not define a field or route for them. Use `linked()` and each linked run's ticket; no undocumented JSON field or route is added.
+
+Depth and recursion checks also apply to batch and chain runs. Each initial job is remembered, including every chain member; initial sibling jobs are not continuations. A repeated addition rejects the whole call before queueing any of it. A continuation loop stops accepting work immediately; like other failures, final completion waits for already attached children. Fingerprint history is stored on Docket's connection and is deleted with its run; job input is never stored in that history or exposed in snapshots.
 
 `track()` skips succeeded keys, as specified in the README, not every terminal outcome. Arrays and eager collections declare immediately even when the returned generator is not iterated. Lazy inputs declare only as reached and do not infer a total. An explicit `total()` wins over inferred totals. The optional key in `itemFailed()` and `itemSkipped()` requires a PHP default for the following code parameter; omitting the code is rejected by validation. Success codes such as `created` are accepted, along with dotted codes; `run.` is reserved. Item result references accept strings or integer ids and are stored as strings.
 
@@ -167,7 +181,7 @@ Reporting (inside the work; returns `static` unless noted):
 | `log(string $code, array $params = [])` | Add an activity log entry. Params must be scalars. | 0.1 |
 | `result(string $reference)` | Set the run-level output reference. | 0.1 |
 | `checkpoint(mixed $position): static` / `checkpoint(): mixed` | Write or read the resumable position. | 0.1 |
-| `add(object\|iterable $jobs)` | Queue more jobs into this run; succeeded keys are skipped. An inline run with added jobs finishes when they do. | 0.1 |
+| `add(object\|iterable $jobs, bool $allowRepeat = false)` | Queue more jobs into this run; succeeded keys are skipped. An inline run with added jobs finishes when they do. Exact repeats fail the run unless `allowRepeat: true`. | 0.1 |
 | `fail(string $code, array $params = []): void` | End the run as failed with a user-safe code. In a queued job, the job isn't retried. Inside `Docket::run()`, it throws `RunFailed`, which `run()` records and rethrows. | 0.1 |
 | `throwIfCancelled(): void` | Stop at a safe point if cancellation was requested. | 0.1 |
 | `writerGrant(): WriterGrant` | A signed, expiring grant for an external worker. | 0.3 |

@@ -11,6 +11,8 @@ use InvalidArgumentException;
 use Laravel\SerializableClosure\SerializableClosure;
 use Tey\Docket\Dispatch\Dispatcher;
 use Tey\Docket\Dispatch\Transactions;
+use Tey\Docket\Protection\Fingerprint;
+use Tey\Docket\Protection\Guard;
 use Tey\Docket\Trees\RollUp;
 use Throwable;
 
@@ -29,6 +31,10 @@ class PendingRun
     private bool $isUnique = false;
 
     private bool $isDetached = false;
+
+    private ?string $linkedFrom = null;
+
+    private bool $repeatsAllowed = false;
 
     private ?string $key = null;
 
@@ -160,6 +166,22 @@ class PendingRun
         return $this->start(true);
     }
 
+    public function linkedTo(Run|Ticket|null $run): static
+    {
+        if ($run !== null) {
+            $this->linkedFrom = $run->id;
+        }
+
+        return $this;
+    }
+
+    public function allowRepeat(): static
+    {
+        $this->repeatsAllowed = true;
+
+        return $this;
+    }
+
     public function run(string|Closure $name, ?Closure $callback = null): Ticket
     {
         if ($this->source !== 'options') {
@@ -194,8 +216,19 @@ class PendingRun
             return $existing->ticket();
         }
 
+        $fingerprints = [];
+        if ($callback !== null) {
+            $fingerprints[app(Fingerprint::class)->inline($this->name, $callback)] = Closure::class;
+        } else {
+            foreach ($this->jobs as $group) {
+                foreach (is_array($group) ? $group : [$group] as $job) {
+                    $fingerprints[app(Fingerprint::class)->job($job)] = $job::class;
+                }
+            }
+        }
+
         try {
-            $run = (new Run)->getConnection()->transaction(function () use ($unique, $key, $callback, $sync): Run {
+            $run = (new Run)->getConnection()->transaction(function () use ($unique, $key, $callback, $sync, $fingerprints): Run {
                 if ($key !== null) {
                     Run::query()->where('idempotency_key', $key)->where('expires_at', '<=', now())->update(['idempotency_key' => null]);
                 }
@@ -220,10 +253,16 @@ class PendingRun
                 }
 
                 $run->initiator()->associate($this->initiator);
-                $parent = app(CurrentRun::class)->current();
+                $parent = $this->linkedFrom === null ? app(CurrentRun::class)->current() : null;
                 $run->parent_run_id = $parent?->id;
                 $run->root_run_id = $parent === null ? null : ($parent->root_run_id ?? $parent->id);
+                $run->linked_from_run_id = $this->linkedFrom;
                 $run->save();
+                foreach ($fingerprints as $fingerprint => $job) {
+                    $run->getConnection()->table('docket_fingerprints')->insert([
+                        'run_id' => $run->id, 'fingerprint' => $fingerprint,
+                    ]);
+                }
                 app(RollUp::class)->changed(null, $run);
 
                 return $run;
@@ -239,6 +278,8 @@ class PendingRun
         }
 
         try {
+            app(Guard::class)->starting($run, $fingerprints, $this->repeatsAllowed);
+
             if ($callback !== null) {
                 return app(InlineRunner::class)->execute($run, $callback);
             }

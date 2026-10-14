@@ -10,6 +10,9 @@ use Laravel\SerializableClosure\SerializableClosure;
 use Tey\Docket\CurrentRun;
 use Tey\Docket\Events\RunDispatched;
 use Tey\Docket\ItemStatus;
+use Tey\Docket\Protection\Fingerprint;
+use Tey\Docket\Protection\Guard;
+use Tey\Docket\Protection\RepeatedWork;
 use Tey\Docket\Reporting\Reporter;
 use Tey\Docket\Reporting\Values;
 use Tey\Docket\Run;
@@ -72,9 +75,9 @@ class Dispatcher
      * @param  list<object|array<object>>  $jobs
      * @return list<object|array<object>>
      */
-    private function prepare(array $jobs, Run $run, string $source, bool $sync): array
+    private function prepare(array $jobs, Run $run, string $source, bool $sync, bool $allowRepeat = true): array
     {
-        return $run->getConnection()->transaction(function () use ($jobs, $run, $source, $sync): array {
+        return $run->getConnection()->transaction(function () use ($jobs, $run, $source, $sync, $allowRepeat): array {
             $stored = Run::query()->lockForUpdate()->findOrFail($run->id);
             $groups = $source === 'chain' ? [$jobs] : $jobs;
             $prepared = [];
@@ -97,6 +100,20 @@ class Dispatcher
                 }
 
                 foreach ($members as $index => $member) {
+                    $fingerprint = app(Fingerprint::class)->job($member);
+                    $history = $run->getConnection()->table('docket_fingerprints')
+                        ->where('run_id', $run->id)->where('fingerprint', $fingerprint);
+                    $previous = $history->first();
+                    if ($previous !== null && ! $allowRepeat) {
+                        throw new RepeatedWork($fingerprint, $member::class, $previous->work_id ?? $run->id);
+                    }
+                    if ($previous === null) {
+                        $run->getConnection()->table('docket_fingerprints')->insert([
+                            'run_id' => $run->id, 'fingerprint' => $fingerprint, 'work_id' => $workId,
+                        ]);
+                    } elseif ($previous->work_id === null) {
+                        $history->update(['work_id' => $workId]);
+                    }
                     $chain[] = $this->prepareJob($member, new Marker($run->id, $index === array_key_last($members), $workId, $key), $sync);
                 }
 
@@ -127,7 +144,7 @@ class Dispatcher
     }
 
     /** @param list<object|array<object>> $jobs */
-    public function add(Run $run, array $jobs): void
+    public function add(Run $run, array $jobs, bool $allowRepeat = false): void
     {
         if ($jobs === []) {
             return;
@@ -143,11 +160,19 @@ class Dispatcher
 
             return ! method_exists($first, 'docketKey') || ! app(Reporter::class)->succeeded($run, Values::key($first->docketKey()));
         }));
-        $prepared = $this->prepare($jobs, $run, 'batch', $sync);
+        try {
+            $prepared = $this->prepare($jobs, $run, 'batch', $sync, $allowRepeat);
+        } catch (RepeatedWork $repeat) {
+            app(Guard::class)->loop($run, $run, $repeat->fingerprint, $repeat->job, $repeat->reference);
+        }
 
         app(Transactions::class)->dispatch($run->id, function () use ($run, $prepared, $sync): void {
             try {
                 foreach ($prepared as $job) {
+                    if ($run->refresh()->finished() || $run->completion_status !== null) {
+                        break;
+                    }
+
                     if (is_array($job)) {
                         $chain = Bus::chain($job);
                         if ($sync) {
