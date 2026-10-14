@@ -21,7 +21,7 @@ body:
     id: package-version
     attributes:
       label: Package Version or Commit
-      description: Docket has no release yet; include the commit you tested.
+      description: The Docket version (or commit) you tested.
     validations:
       required: true
   - type: input

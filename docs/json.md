@@ -1,6 +1,6 @@
 # JSON Status Contract v1
 
-> Planned API for Docket. Each entry is tagged with the milestone it lands in; nothing is released yet.
+> JSON contract for Docket. Each entry is tagged with the milestone it lands in; 0.1 is released (v0.1.0), 0.2 and 0.3 are planned.
 
 All timestamps are ISO 8601 UTC. Responses send `Cache-Control: private, no-store`.
 
