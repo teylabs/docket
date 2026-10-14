@@ -23,9 +23,12 @@ class InlineRunner
         } catch (RunCancelled) {
             return $run->refresh()->ticket()->withResult(null);
         } catch (Throwable $exception) {
-            $error = $exception instanceof RunFailed
-                ? ['code' => $exception->failureCode, 'params' => $exception->params]
-                : ['code' => 'run.exception', 'params' => []];
+            $child = app(CurrentRun::class)->failureChild($exception, $run);
+            $error = match (true) {
+                $child !== null => ['code' => 'run.child_failed', 'params' => ['child' => $child]],
+                $exception instanceof RunFailed => ['code' => $exception->failureCode, 'params' => $exception->params],
+                default => ['code' => 'run.exception', 'params' => []],
+            };
 
             if (! $exception instanceof RunFailed) {
                 $run->logs()->create(['code' => 'run.exception', 'params' => ['exception' => $exception::class]]);

@@ -7,6 +7,7 @@ use Illuminate\Support\Facades\Event;
 use Tey\Docket\Events\ItemFinished;
 use Tey\Docket\ItemStatus;
 use Tey\Docket\Run;
+use Tey\Docket\Trees\RollUp;
 
 /** @internal */
 class Reporter
@@ -17,11 +18,13 @@ class Reporter
             $stored = Run::query()->lockForUpdate()->findOrFail($run->id);
 
             if (! $stored->finished()) {
+                $before = clone $stored;
                 $callback($stored);
                 $stored->setAttribute('updated_at', now());
                 // A heartbeat is a change even when the clock or value has not moved.
                 $stored->revision++;
                 $stored->save();
+                app(RollUp::class)->changed($before, $stored);
             }
         }, 5);
 
