@@ -14,6 +14,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 use Tey\Docket\Database\Model;
+use Tey\Docket\Exceptions\RunFailed;
 
 /**
  * @api
@@ -54,6 +55,16 @@ use Tey\Docket\Database\Model;
 class Run extends Model
 {
     use HasUlids;
+
+    /** @param array<string, scalar|null> $params */
+    public function fail(string $code, array $params = []): void
+    {
+        if (str_starts_with($code, 'run.')) {
+            throw new InvalidArgumentException('The run. code prefix is reserved for Docket.');
+        }
+
+        throw new RunFailed($code, $params);
+    }
 
     protected $table = 'docket_runs';
 

@@ -8,6 +8,7 @@ use Illuminate\Contracts\Queue\ShouldQueue;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\Event;
 use Laravel\SerializableClosure\SerializableClosure;
+use Tey\Docket\CurrentRun;
 use Tey\Docket\Events\RunDispatched;
 use Tey\Docket\Run;
 use Tey\Docket\RunStatus;
@@ -59,7 +60,7 @@ class Dispatcher
 
                 if (! $job instanceof ShouldQueue || ($sync && ! method_exists($job, 'onConnection'))) {
                     $run->update(['status' => RunStatus::Running]);
-                    Bus::dispatchSync($job);
+                    app(CurrentRun::class)->during($run, static fn () => Bus::dispatchSync($job));
                     app(Lifecycle::class)->finish($id, RunStatus::Succeeded);
                 } elseif ($sync) {
                     Bus::dispatchSync($job);

@@ -10,6 +10,16 @@ use Illuminate\Database\Eloquent\Model;
 /** @api */
 class Docket
 {
+    public function run(string|Closure $name, ?Closure $callback = null): Ticket
+    {
+        return (new PendingRun('options', []))->run($name, $callback);
+    }
+
+    public function current(): ?Run
+    {
+        return app(CurrentRun::class)->current();
+    }
+
     public function job(object $job): PendingRun
     {
         return new PendingRun('job', [$job]);

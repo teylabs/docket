@@ -145,9 +145,29 @@ class PendingRun
         return $this->start(true);
     }
 
-    private function start(bool $sync): Ticket
+    public function run(string|Closure $name, ?Closure $callback = null): Ticket
     {
-        if ($this->jobs === [] || in_array([], $this->jobs, true)) {
+        if ($this->source !== 'options') {
+            throw new InvalidArgumentException('Use dispatchSync() for a pending job, batch or chain.');
+        }
+
+        if ($name instanceof Closure) {
+            $callback = $name;
+            $name = $this->name === 'options' ? 'closure' : $this->name;
+        }
+
+        if ($callback === null) {
+            throw new InvalidArgumentException('An inline run requires a closure.');
+        }
+
+        $this->name = $name;
+
+        return $this->start(true, $callback);
+    }
+
+    private function start(bool $sync, ?Closure $callback = null): Ticket
+    {
+        if ($callback === null && ($this->jobs === [] || in_array([], $this->jobs, true))) {
             throw new InvalidArgumentException('Dispatch requires at least one job.');
         }
 
@@ -160,13 +180,14 @@ class PendingRun
         }
 
         try {
-            $run = (new Run)->getConnection()->transaction(function () use ($unique, $key): Run {
+            $run = (new Run)->getConnection()->transaction(function () use ($unique, $key, $callback): Run {
                 if ($key !== null) {
                     Run::query()->where('idempotency_key', $key)->where('expires_at', '<=', now())->update(['idempotency_key' => null]);
                 }
 
                 $run = new Run([
                     'name' => $this->name,
+                    'status' => $callback === null ? RunStatus::Queued : RunStatus::Running,
                     'total' => $this->units ?? $this->declaredTotal(),
                     'stale_after' => $this->staleSeconds ?? ($this->source === 'job' ? ($this->jobs[0]->timeout ?? null) : null) ?? config('docket.stale_after'),
                     'expires_at' => $this->expiry,
@@ -193,6 +214,10 @@ class PendingRun
             }
 
             return $run->ticket();
+        }
+
+        if ($callback !== null) {
+            return app(InlineRunner::class)->execute($run, $callback);
         }
 
         $jobs = $this->jobs;
