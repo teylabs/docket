@@ -7,7 +7,8 @@ All timestamps are ISO 8601 UTC. Responses send `Cache-Control: private, no-stor
 ### Snapshot (`GET /docket/runs/{token}`, `Run::toArray()`)
 
 - [x] `Run::toArray()` and Eloquent JSON serialization implement the v1 snapshot ([#4](https://github.com/teylabs/docket/issues/4), unreleased).
-- [ ] HTTP routes, response headers, reporting and automatic tree roll-up. Progress and child counts currently read persisted counters; action links use the application's Gate abilities.
+- [x] Reporting updates progress, item counts, step, results and revision; `partial` stays bounded to the newest 20 item references. Checkpoints never enter the snapshot or ticket ([#7](https://github.com/teylabs/docket/issues/7), unreleased). Structural limits are listed in [the reference](reference.md).
+- [ ] HTTP routes, response headers and automatic tree roll-up. Child counts currently read persisted counters; action links use the application's Gate abilities.
 
 | Field | Type | Null | Meaning |
 | --- | --- | --- | --- |

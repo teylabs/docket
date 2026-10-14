@@ -2,7 +2,7 @@
 
 namespace Tey\Docket;
 
-use Tey\Docket\Dispatch\Lifecycle;
+use Tey\Docket\Dispatch\Work;
 
 /** @internal */
 class InlineCompletion
@@ -11,7 +11,7 @@ class InlineCompletion
 
     private bool $committed = false;
 
-    public function __construct(private string $id) {}
+    public function __construct(private string $id, private string $workId) {}
 
     public function committed(): void
     {
@@ -31,7 +31,6 @@ class InlineCompletion
             return;
         }
 
-        $run = Run::findOrFail($this->id);
-        app(Lifecycle::class)->finish($this->id, $run->failed_count > 0 || $run->skipped_count > 0 ? RunStatus::Partial : RunStatus::Succeeded);
+        app(Work::class)->complete($this->id, $this->workId);
     }
 }

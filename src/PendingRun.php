@@ -184,7 +184,7 @@ class PendingRun
         }
 
         try {
-            $run = (new Run)->getConnection()->transaction(function () use ($unique, $key, $callback): Run {
+            $run = (new Run)->getConnection()->transaction(function () use ($unique, $key, $callback, $sync): Run {
                 if ($key !== null) {
                     Run::query()->where('idempotency_key', $key)->where('expires_at', '<=', now())->update(['idempotency_key' => null]);
                 }
@@ -193,6 +193,8 @@ class PendingRun
                     'name' => $this->name,
                     'status' => $callback === null ? RunStatus::Queued : RunStatus::Running,
                     'total' => $this->units ?? $this->declaredTotal(),
+                    'total_explicit' => $this->units !== null,
+                    'dispatch_sync' => $callback === null && $sync,
                     'stale_after' => $this->staleSeconds ?? ($this->source === 'job' ? ($this->jobs[0]->timeout ?? null) : null) ?? config('docket.stale_after'),
                     'expires_at' => $this->expiry,
                     'unique_key' => $unique,

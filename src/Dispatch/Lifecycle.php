@@ -23,6 +23,11 @@ class Lifecycle
                 return;
             }
 
+            if (in_array($status, [RunStatus::Succeeded, RunStatus::Partial], true)
+                && $connection->table('docket_work')->where('run_id', $id)->where('completed', false)->exists()) {
+                return;
+            }
+
             $run->update([
                 'status' => $status,
                 'error' => $error,

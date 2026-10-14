@@ -56,7 +56,10 @@ class CurrentRun
         $id = $event->job->payload()['docket']['id'] ?? null;
 
         if (is_string($id)) {
-            $this->stack[] = Run::findOrFail($id);
+            $run = Run::findOrFail($id);
+            $key = $event->job->payload()['docket']['item_key'] ?? null;
+            $run->reportingKey = is_string($key) ? $key : null;
+            $this->stack[] = $run;
         }
     }
 

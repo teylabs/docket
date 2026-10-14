@@ -53,7 +53,7 @@ it('restores the caller after tracked and untracked synchronous queue work', fun
 it('clears the current run on every worker exit and before untracked jobs', function (string $boundary) {
     $run = Run::create(['name' => 'queued']);
     $queue = new DatabaseQueue(DB::connection(), 'jobs');
-    $record = new DatabaseJobRecord((object) ['payload' => json_encode(['docket' => ['id' => $run->id, 'finishes' => false, 'batch_id' => null]])]);
+    $record = new DatabaseJobRecord((object) ['payload' => json_encode(['docket' => ['id' => $run->id, 'finishes' => false, 'batch_id' => null, 'item_key' => null, 'work_id' => 'test-work']])]);
     $job = new DatabaseJob(app(), $queue, $record, 'database', 'default');
     Event::dispatch(new JobProcessing('database', $job));
     expect(Docket::current()?->id)->toBe($run->id);
