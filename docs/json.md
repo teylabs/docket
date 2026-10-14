@@ -11,7 +11,7 @@ All timestamps are ISO 8601 UTC. Responses send `Cache-Control: private, no-stor
 - [x] Automatic tree progress/status roll-up, parent/root ids, direct-child counts and conditional `links.children` ([#8](https://github.com/teylabs/docket/issues/8), unreleased). Detached children remain in child counts but not rolled-up progress or status.
 - [x] `linkedTo()` populates `linked_from_run_id` on a new root without changing the original's counters or status ([#9](https://github.com/teylabs/docket/issues/9), unreleased). Fingerprints and work input are never snapshot or ticket fields.
 - [x] Cancellation sets `cancel_requested` until completion; retries populate `retry_of_run_id` and inherit successful progress. Reaping exposes `run.stalled`; expiry deletes only finished runs (#10). Replay input, checkpoints, batch ids and heartbeat timestamps remain private storage, not JSON fields.
-- [ ] HTTP routes and response headers. Action links use the application's Gate abilities.
+- [x] HTTP routes, private/no-store response headers, initiator-only default policy, current-viewer action links and access checks on every request (#12).
 
 | Field | Type | Null | Meaning |
 | --- | --- | --- | --- |
@@ -57,11 +57,14 @@ Full example: README, "The Status Snapshot". A failed run, for illustration:
 
 - [x] Dispatch tickets, `Run::ticket()`, exact ticket fields, current-user action links, JSON and PHP serialization, `202`/`200`, `Location` and `Cache-Control: private, no-store` ([#5](https://github.com/teylabs/docket/issues/5), unreleased).
 - [x] Inline tickets use the same fields and status-dependent HTTP response. In-process results never enter JSON or PHP serialization ([#6](https://github.com/teylabs/docket/issues/6), unreleased).
-- [ ] Package routes (#12), browser redirects and rendered progress surfaces (0.2).
+- [x] Package JSON routes (#12).
+- [ ] Browser redirects and rendered progress surfaces (0.2).
 
 A strict subset of the snapshot: `schema_version`, `id`, `token`, `name`, `status`, `revision`, `poll_after_ms`, and `links` with `poll` plus `cancel`/`retry` under the same conditions. Never: writer grants, capability secrets, `checkpoint`, item content, subject attributes, or the in-process `result()` of a `Docket::run()` ticket. Example: the top of the README. A `Docket::run()` ticket is usually finished, so it answers `200`. HTTP status: `202` while unfinished, `200` when finished. A `Location` header gives the poll link. This applies when the request expects JSON (`Accept: application/json`, or `$request->expectsJson()`). From 0.2, other requests get a `303` redirect to the watch page instead. The same fields, and nothing more, go into Inertia props, Livewire round trips and queued payloads.
 
 ### Items page (`links.items`)
+
+- [x] Cursor-paginated item fields and all four status filters (#12).
 
 ```json
 {
@@ -77,7 +80,7 @@ At most 100 per page. `status` filter: `pending`, `succeeded`, `failed`, `skippe
 ### Children page (`links.children`)
 
 - [x] `Run::tree($viewer)` exposes policy-filtered nested nodes with progress, counts and `latest_log` (#8).
-- [ ] The cursor-paginated children HTTP page (#12). Tickets themselves still contain only the ticket fields above.
+- [x] The cursor-paginated children HTTP page (#12). Tickets themselves still contain only the ticket fields above. Page entries include `poll_after_ms` and authorized action links from the ticket, in addition to the fields illustrated below.
 
 Cursor-paginated direct children, oldest first, at most 100 per page. Only children the viewer may `view` are listed; the parent's `children` counts still cover all of them. Each entry is the child's ticket plus what a tree view needs:
 
@@ -102,9 +105,13 @@ Cursor-paginated direct children, oldest first, at most 100 per page. Only child
 
 ### Logs page (`links.logs`)
 
+- [x] Cursor-paginated logs with code, object params and UTC creation timestamps (#12).
+
 `{ "data": [{ "code": "rows.staged", "params": { "count": 500 }, "created_at": "…" }], "links": { "next": null, "prev": null } }`
 
 ### Errors
+
+- [x] Indistinguishable 404s, control authorization and state errors, and snapshot polling limits with `Retry-After` (#12). See [route details](reference.md#routes) for validation and polling rules.
 
 | Code | When |
 | --- | --- |

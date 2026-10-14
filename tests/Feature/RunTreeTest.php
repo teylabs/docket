@@ -265,6 +265,7 @@ it('counts cancelled children only in total and does not turn their parent parti
 });
 
 it('filters tree nodes and inaccessible branches with the explicit or signed in viewer', function () {
+    Gate::policy(Run::class, stdClass::class);
     $root = Docket::run('root', function () {
         Docket::run('visible', function (Run $run) {
             $run->log('older')->log('latest', ['id' => 3])->step('validate')->total(2)->itemSucceeded('part', result: 'private-reference');

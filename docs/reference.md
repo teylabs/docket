@@ -14,7 +14,7 @@ Implemented for 0.1, unreleased ([#4](https://github.com/teylabs/docket/issues/4
 - [x] Reporting methods (#7).
 - [x] Cancel and retry control methods (#10).
 - [x] Tree traversal and automatic progress/status roll-up (#8).
-- [ ] Package routes and the default policy.
+- [x] Package JSON routes and the initiator-only default policy (#12).
 
 Implemented for 0.1, unreleased ([#5](https://github.com/teylabs/docket/issues/5)):
 
@@ -59,7 +59,8 @@ Implemented for 0.1, unreleased ([#8](https://github.com/teylabs/docket/issues/8
 - [x] Parents wait for attached children before completion callbacks and `RunFinished`. Caught or queued child failures make the parent partial; an uncaught child exception is rethrown unchanged and records `run.child_failed` with the direct child's id. A pending failure is preserved while other children finish.
 - [x] `PendingRun::detached()` keeps the child listed but excludes its progress and status from the parent's roll-up. Cancelled children count only in `children.total` and do not make a parent partial.
 - [x] Depth enforcement, linked top-level runs and loop rescue (#9).
-- [ ] Children HTTP pages and the default policy (#12); tree UI and console watchers (0.2).
+- [x] Children HTTP pages and the default policy (#12).
+- [ ] Tree UI and console watchers (0.2).
 
 Implemented for 0.1, unreleased ([#9](https://github.com/teylabs/docket/issues/9)):
 
@@ -241,6 +242,14 @@ Each has `string $id` (stable, for deduplication) and `Run $run`. Delivery is at
 ### Routes
 
 The table in the README. Package JSON routes: 0.1. The watch page: 0.2. The external update route `POST /docket/runs/{id}/updates` (writer grants): 0.3.
+
+Implemented for 0.1, unreleased (#12):
+
+- [x] Snapshot, items, logs, children, cancel and retry routes, with configurable `routes.enabled`, `routes.prefix` and `routes.middleware` (defaults: `true`, `docket`, `['web']`).
+- [x] The default policy allows only the initiator, matching both morph type and id. An application policy registered with `Gate::policy()` takes precedence. Guests and runs without an initiator are denied by default.
+- [x] Every endpoint checks `view` before reading or acting; unknown, expired and unviewable runs return the same 404. Control permission failures return 403; state conflicts and work without retained replay input return 409.
+- [x] Cursor pages contain at most 100 entries. Children are policy-filtered before public cursor boundaries are chosen; expired children are omitted. Items and logs use ascending ids; children use creation time, then id. Invalid status filters or cursors return Laravel's 422 validation response.
+- [x] All package responses use JSON and `Cache-Control: private, no-store`. Snapshot polling is limited per viewer and run to one request per `poll_after_ms`, rounded up to whole seconds (at least one); guests allowed by an application policy are keyed by IP. Faster polls return 429 with `Retry-After`. Items, logs and children can be fetched alongside a snapshot.
 
 ### JavaScript (Vue and React share names)
 
