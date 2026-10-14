@@ -20,6 +20,8 @@ class Ticket implements Arrayable, JsonSerializable, Responsable
 
     private mixed $inlineResult = null;
 
+    private ?Run $serializationRun = null;
+
     /** @internal */
     public function withResult(mixed $result): static
     {
@@ -57,7 +59,7 @@ class Ticket implements Arrayable, JsonSerializable, Responsable
     {
         $poll = url(trim(config()->string('docket.routes.prefix'), '/').'/runs/'.$this->token);
         $links = ['poll' => $poll];
-        $run = $this->run();
+        $run = $this->serializationRun ??= $this->run();
 
         if (! $this->status->isFinished() && Gate::allows('cancel', $run)) {
             $links['cancel'] = $poll.'/cancel';

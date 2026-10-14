@@ -2,6 +2,9 @@
 
 use Illuminate\Auth\GenericUser;
 use Illuminate\Database\Schema\Blueprint;
+use Illuminate\Queue\Events\JobProcessed;
+use Illuminate\Queue\Events\JobProcessing;
+use Illuminate\Queue\WorkerOptions;
 use Illuminate\Support\Facades\Bus;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Event;
@@ -446,6 +449,37 @@ it('sets the current run on a real worker and clears it before the next job', fu
     artisan('queue:work', ['--stop-when-empty' => true, '--sleep' => 0])->assertSuccessful();
     expect(DB::table('work_results')->pluck('label')->all())->toBe([$ticket->id, $ticket->id, 'clear'])
         ->and(Docket::current())->toBeNull();
+});
+
+it('keeps one worker stack empty and memory flat across one thousand jobs after warm-up', function () {
+    $worker = app('queue.worker');
+    $options = new WorkerOptions(sleep: 0, maxTries: 1);
+    $processed = 0;
+    $current = null;
+    Event::listen(JobProcessing::class, function () use (&$current) {
+        $run = Docket::current();
+        expect($run)->not->toBeNull();
+        $current = WeakReference::create($run);
+    });
+    Event::listen(JobProcessed::class, function () use (&$processed) {
+        expect(Docket::current())->toBeNull();
+        $processed++;
+    });
+    $samples = [];
+    for ($index = 1; $index <= 1100; $index++) {
+        Docket::job(new ReportingWork('unit:'.$index))->dispatch();
+        $worker->runNextJob('database', 'default', $options);
+        expect(Docket::current())->toBeNull()->and($current?->get())->toBeNull();
+        if ($index >= 100 && $index % 100 === 0) {
+            gc_collect_cycles();
+            $samples[] = memory_get_usage();
+        }
+    }
+    expect($processed)->toBe(1100)
+        ->and(Run::query()->succeeded()->count())->toBe(1100)
+        ->and(Queue::size())->toBe(0)
+        // Measure live PHP allocations, not allocator pages or a process peak.
+        ->and(max($samples) - min($samples))->toBeLessThan(1024 * 1024);
 });
 
 it('attaches docketable only to dispatched copies and settles keyed jobs on a real worker', function () {

@@ -5,6 +5,7 @@ namespace Tey\Docket\Trees;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
+use Tey\Docket\Log;
 use Tey\Docket\Run;
 
 /** @internal */
@@ -34,21 +35,26 @@ class Traversal
             return [];
         }
 
-        return $this->node($run, $this->descendants($run)->groupBy('parent_run_id'), $viewer);
+        $descendants = $this->descendants($run);
+        $ids = [$run->id, ...$descendants->pluck('id')->all()];
+        $logs = Log::query()->whereIn('id', Log::query()->selectRaw('max(id)')->whereIn('run_id', $ids)->groupBy('run_id'))->get()->keyBy('run_id');
+
+        return $this->node($run, $descendants->groupBy('parent_run_id'), $logs, $viewer);
     }
 
     /**
      * @param  Collection<string, Collection<int, Run>>  $children
+     * @param  Collection<string, Log>  $logs
      * @return array<string, mixed>
      */
-    private function node(Run $run, Collection $children, ?Authenticatable $viewer): array
+    private function node(Run $run, Collection $children, Collection $logs, ?Authenticatable $viewer): array
     {
-        $log = $run->logs()->orderByDesc('id')->first();
+        $log = $logs->get($run->id);
         $nodes = [];
 
         foreach ($children->get($run->id, collect()) as $child) {
             if (Gate::forUser($viewer)->allows('view', $child)) {
-                $nodes[] = $this->node($child, $children, $viewer);
+                $nodes[] = $this->node($child, $children, $logs, $viewer);
             }
         }
 
