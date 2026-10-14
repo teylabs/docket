@@ -326,19 +326,23 @@ class Run extends Model
     /** @return array<string, mixed> */
     public function toArray(): array
     {
-        $poll = url(trim(config()->string('docket.routes.prefix'), '/').'/runs/'.$this->token);
-        $links = ['poll' => $poll, 'items' => $poll.'/items', 'logs' => $poll.'/logs'];
+        $links = [];
 
-        if ($this->children_total > 0) {
-            $links['children'] = $poll.'/children';
-        }
+        if (config()->boolean('docket.routes.enabled')) {
+            $poll = url(trim(config()->string('docket.routes.prefix'), '/').'/runs/'.$this->token);
+            $links = ['poll' => $poll, 'items' => $poll.'/items', 'logs' => $poll.'/logs'];
 
-        if (! $this->finished() && Gate::allows('cancel', $this)) {
-            $links['cancel'] = $poll.'/cancel';
-        }
+            if ($this->children_total > 0) {
+                $links['children'] = $poll.'/children';
+            }
 
-        if (in_array($this->status, [RunStatus::Partial, RunStatus::Failed, RunStatus::Cancelled], true) && Gate::allows('retry', $this)) {
-            $links['retry'] = $poll.'/retry';
+            if (! $this->finished() && Gate::allows('cancel', $this)) {
+                $links['cancel'] = $poll.'/cancel';
+            }
+
+            if (in_array($this->status, [RunStatus::Partial, RunStatus::Failed, RunStatus::Cancelled], true) && Gate::allows('retry', $this)) {
+                $links['retry'] = $poll.'/retry';
+            }
         }
 
         return [

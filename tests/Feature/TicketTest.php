@@ -43,6 +43,29 @@ it('returns 202 while unfinished and 200 once finished with Location and private
     get('ticket')->assertStatus($expectedStatus)->assertJson($ticket->toArray());
 })->with(RunStatus::cases());
 
+it('serializes tickets and snapshots without route config or Location when routes are disabled', function (RunStatus $status) {
+    config(['docket.routes' => ['enabled' => false]]);
+    Gate::policy(Run::class, stdClass::class);
+    Gate::define('cancel', fn (?object $user, Run $run) => true);
+    Gate::define('retry', fn (?object $user, Run $run) => true);
+    $run = Run::create(['name' => 'export.build', 'status' => $status, 'children_total' => 1]);
+    $ticket = $run->ticket();
+    $expectedStatus = $status->isFinished() ? 200 : 202;
+
+    expect($ticket->toArray()['links'])->toBe([])
+        ->and($ticket->jsonSerialize()['links'])->toBe([])
+        ->and(json_decode(json_encode($ticket), true)['links'])->toBe([])
+        ->and(unserialize(serialize($ticket))->toArray())->toBe($ticket->toArray())
+        ->and($run->toArray()['links'])->toBe([])
+        ->and(json_decode($run->toJson(), true)['links'])->toBe([])
+        ->and($ticket->toArray()['poll_after_ms'])->toBe($status->isFinished() ? null : 2000);
+
+    Route::get('ticket', fn () => $ticket);
+    getJson('ticket')->assertStatus($expectedStatus)->assertExactJson($ticket->toArray())
+        ->assertHeaderMissing('Location')->assertHeader('Cache-Control', 'no-store, private');
+    get('ticket')->assertStatus($expectedStatus)->assertHeaderMissing('Location');
+})->with(RunStatus::cases());
+
 it('keeps the original status and revision but resolves permissions for the current user', function () {
     Gate::policy(Run::class, stdClass::class);
     $run = Run::create(['name' => 'export.build']);
