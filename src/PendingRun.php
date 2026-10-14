@@ -46,7 +46,11 @@ class PendingRun
     {
         $this->jobs = $jobs;
         $first = $jobs[0] ?? null;
-        $this->name = $source === 'job' && is_object($first) ? ($first instanceof Closure ? 'closure' : $first::class) : $source;
+        $this->name = match (true) {
+            $source === 'options', $source === 'job' && $first instanceof Closure => 'closure',
+            $source === 'job' && is_object($first) => $first::class,
+            default => $source,
+        };
         $this->initiator = auth()->user();
     }
 
@@ -153,7 +157,7 @@ class PendingRun
 
         if ($name instanceof Closure) {
             $callback = $name;
-            $name = $this->name === 'options' ? 'closure' : $this->name;
+            $name = $this->name;
         }
 
         if ($callback === null) {

@@ -77,6 +77,7 @@ it('uses independent option starters and keeps inline options and authenticated 
     $other = Docket::by(null)->run(fn () => null)->run();
     expect($other->subject)->toBeNull()->and($other->initiator)->toBeNull()->and($other->total)->toBeNull();
     expect(Docket::name('ignored')->run('explicit', fn () => null)->name)->toBe('explicit');
+    expect(Docket::name('options')->run(fn () => null)->name)->toBe('options');
 });
 
 it('rejects pending jobs batches chains and missing callbacks before starting', function () {
@@ -230,3 +231,14 @@ it('releases in-process results with their tickets even while waiting for commit
     expect($reference->get())->toBeNull();
     DB::commit();
 });
+
+it('waits for a transaction opened by the closure and still open when it returns', function (bool $rollback) {
+    $ticket = Docket::run(function () {
+        DB::beginTransaction();
+
+        return 42;
+    });
+    expect($ticket->status)->toBe(RunStatus::Running)->and($ticket->result())->toBe(42);
+    $rollback ? DB::rollBack() : DB::commit();
+    expect($ticket->run()->status)->toBe($rollback ? RunStatus::Failed : RunStatus::Succeeded);
+})->with([true, false]);

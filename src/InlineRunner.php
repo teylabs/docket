@@ -32,7 +32,7 @@ class InlineRunner
             throw $exception;
         }
 
-        $completion->completed();
+        app(Transactions::class)->dispatch($run->id, $completion->completed(...));
 
         return $run->refresh()->ticket()->withResult($result);
     }
