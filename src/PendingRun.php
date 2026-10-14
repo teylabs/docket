@@ -38,7 +38,7 @@ class PendingRun
 
     private ?string $key = null;
 
-    private ?int $units = null;
+    protected ?int $units = null;
 
     private ?int $staleSeconds = null;
 
@@ -54,7 +54,7 @@ class PendingRun
      *
      * @param  list<object|array<object>>  $jobs
      */
-    public function __construct(private string $source, array $jobs)
+    public function __construct(protected string $source, array $jobs)
     {
         $this->jobs = $jobs;
         $first = $jobs[0] ?? null;
@@ -229,6 +229,11 @@ class PendingRun
             throw new InvalidArgumentException('Dispatch requires at least one job.');
         }
 
+        return $this->execute($sync, $callback);
+    }
+
+    protected function execute(bool $sync, ?Closure $callback): Ticket
+    {
         $subjectKey = $this->subject?->getKey();
         $unique = $this->isUnique ? hash('sha256', serialize([$this->name, $this->subject?->getMorphClass(), is_int($subjectKey) ? (string) $subjectKey : $subjectKey])) : null;
         $key = $this->key === null ? null : hash('sha256', serialize([$this->name, $this->key]));

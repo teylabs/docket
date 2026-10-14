@@ -11,3 +11,4 @@
 - Track child runs with parent/root relations, policy-filtered trees, atomic progress and status roll-up, detached children and completion that waits for the tree. (#8)
 - Cap nesting depth, start independent linked runs, and rescue exact recursion and continuation loops with durable fingerprints, repeat opt-outs and reported `LoopDetected` events. (#9)
 - Cancel runs cooperatively, retry retained work with inherited successes and checkpoints, and prune expired runs after `RunExpiring` while failing stale work as `run.stalled`. (#10)
+- Fake dispatches and inline runs with `Docket::fake()`, assert reported work with `FakeRun`, and attach isolated fake runs to jobs with `withFakeDocket()`. (#11)
