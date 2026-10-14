@@ -54,6 +54,7 @@ class Lifecycle
                 'status' => $status,
                 'error' => $error,
                 'finished_at' => now(),
+                'cancel_requested' => false,
                 'expires_at' => $run->expires_at ?? now()->addSeconds(config()->integer('docket.ttl')),
                 'unique_key' => null,
             ]);

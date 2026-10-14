@@ -10,3 +10,4 @@
 - Report progress, logs, item outcomes, results and checkpoints from inline and queued work, with `Docketable`, lazy tracking, added jobs, cancellation safe points and stable `ItemFinished` events. (#7)
 - Track child runs with parent/root relations, policy-filtered trees, atomic progress and status roll-up, detached children and completion that waits for the tree. (#8)
 - Cap nesting depth, start independent linked runs, and rescue exact recursion and continuation loops with durable fingerprints, repeat opt-outs and reported `LoopDetected` events. (#9)
+- Cancel runs cooperatively, retry retained work with inherited successes and checkpoints, and prune expired runs after `RunExpiring` while failing stale work as `run.stalled`. (#10)

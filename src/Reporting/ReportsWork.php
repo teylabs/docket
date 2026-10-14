@@ -182,7 +182,7 @@ trait ReportsWork
 
     public function throwIfCancelled(): void
     {
-        if ($this->refresh()->cancel_requested) {
+        if ($this->refresh()->cancel_requested || $this->cancelled()) {
             app(Lifecycle::class)->finish($this->id, RunStatus::Cancelled);
 
             throw new RunCancelled;

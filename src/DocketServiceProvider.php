@@ -46,6 +46,8 @@ class DocketServiceProvider extends ServiceProvider
         }
 
         if ($this->app->runningInConsole()) {
+            $this->commands([Console\Prune::class]);
+
             $this->publishes([
                 __DIR__.'/../config/docket.php' => config_path('docket.php'),
             ], 'docket-config');

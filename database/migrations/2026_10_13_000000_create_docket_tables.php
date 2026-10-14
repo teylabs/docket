@@ -25,6 +25,9 @@ return new class extends Migration
             $table->string('unique_key', 64)->nullable()->unique();
             $table->string('idempotency_key', 64)->nullable()->unique();
             $table->unsignedInteger('stale_after')->nullable();
+            $table->timestamp('last_report_at')->nullable();
+            $table->longText('replay')->nullable();
+            $table->string('batch_id')->nullable();
             $table->text('callbacks')->nullable();
             $table->string('step')->nullable();
             $table->unsignedBigInteger('done')->default(0);

@@ -25,6 +25,7 @@ use Tey\Docket\Reporting\ReportsWork;
  * @property string $name
  * @property RunStatus $status
  * @property int $revision
+ * @property int|null $stale_after
  * @property string|null $step
  * @property int $done
  * @property int|null $total
@@ -96,6 +97,7 @@ class Run extends Model
     {
         static::creating(function (Run $run) {
             $run->token ??= bin2hex(random_bytes(32));
+            $run->setAttribute('last_report_at', now());
         });
 
         static::updated(function (Run $run) {
@@ -115,6 +117,7 @@ class Run extends Model
         return [
             'status' => RunStatus::class,
             'revision' => 'integer',
+            'stale_after' => 'integer',
             'step' => 'string',
             'result' => 'string',
             'total_explicit' => 'boolean',
@@ -141,6 +144,7 @@ class Run extends Model
             'cancel_requested' => 'boolean',
             'finished_at' => 'datetime',
             'expires_at' => 'datetime',
+            'last_report_at' => 'datetime',
         ];
     }
 
@@ -276,6 +280,18 @@ class Run extends Model
     public function cancelRequested(): bool
     {
         return $this->cancel_requested;
+    }
+
+    public function cancel(): static
+    {
+        app(Control::class)->cancel($this);
+
+        return $this;
+    }
+
+    public function retry(): PendingRun
+    {
+        return app(Dispatch\Replay::class)->pending($this);
     }
 
     public function ticket(): Ticket
