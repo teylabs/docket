@@ -29,6 +29,8 @@ return new class extends Migration
             $table->string('step')->nullable();
             $table->unsignedBigInteger('done')->default(0);
             $table->unsignedBigInteger('total')->nullable();
+            $table->boolean('total_explicit')->default(false);
+            $table->boolean('dispatch_sync')->default(false);
             $table->unsignedBigInteger('succeeded_count')->default(0);
             $table->unsignedBigInteger('failed_count')->default(0);
             $table->unsignedBigInteger('skipped_count')->default(0);
@@ -54,6 +56,13 @@ return new class extends Migration
             $table->timestamps();
             $table->timestamp('finished_at')->nullable();
             $table->timestamp('expires_at')->nullable()->index();
+        });
+
+        $schema->create('docket_work', function (Blueprint $table) {
+            $table->ulid('id')->primary();
+            $table->foreignUlid('run_id')->constrained('docket_runs')->cascadeOnDelete();
+            $table->boolean('completed')->default(false);
+            $table->index(['run_id', 'completed']);
         });
 
         $schema->create('docket_items', function (Blueprint $table) {
@@ -87,6 +96,7 @@ return new class extends Migration
         $schema = Schema::connection($this->getConnection());
         $schema->dropIfExists('docket_logs');
         $schema->dropIfExists('docket_items');
+        $schema->dropIfExists('docket_work');
         $schema->dropIfExists('docket_runs');
     }
 };

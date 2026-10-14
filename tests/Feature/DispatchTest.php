@@ -17,9 +17,11 @@ use Tey\Docket\Run;
 use Tey\Docket\RunStatus;
 use Tey\Docket\Tests\Fixtures\EncryptedWork;
 use Tey\Docket\Tests\Fixtures\KeyedWork;
+use Tey\Docket\Tests\Fixtures\PlainReportingWork;
 use Tey\Docket\Tests\Fixtures\PlainWork;
 use Tey\Docket\Tests\Fixtures\QueuedWork;
 use Tey\Docket\Tests\Fixtures\RecordWork;
+use Tey\Docket\Tests\Fixtures\ReportingWork;
 use Tey\Docket\Tests\Fixtures\Upload;
 use Tey\Docket\Tests\Fixtures\User;
 
@@ -445,3 +447,143 @@ it('sets the current run on a real worker and clears it before the next job', fu
     expect(DB::table('work_results')->pluck('label')->all())->toBe([$ticket->id, $ticket->id, 'clear'])
         ->and(Docket::current())->toBeNull();
 });
+
+it('attaches docketable only to dispatched copies and settles keyed jobs on a real worker', function () {
+    $job = new ReportingWork('unit:1');
+    expect($job->docket())->toBeNull();
+    $ticket = Docket::batch([$job, new ReportingWork('unit:2', 'skip')])->dispatch();
+    expect($job->docket())->toBeNull()->and($ticket->run()->items()->pending()->count())->toBe(2);
+    artisan('queue:work', ['--stop-when-empty' => true, '--sleep' => 0])->assertSuccessful();
+    $run = $ticket->run();
+    expect($run->status)->toBe(RunStatus::Partial)->and($run->done)->toBe(2)
+        ->and($run->succeeded_count)->toBe(1)->and($run->skipped_count)->toBe(1)
+        ->and($run->items()->where('key', 'unit:2')->first()->code)->toBe('unit.locked')
+        ->and(Docket::current())->toBeNull();
+});
+
+it('fails only the keyed item on its final attempt including a chain keyed by its first job', function (bool $chain) {
+    $failed = new ReportingWork('bad', 'fail');
+    $ticket = Docket::batch([
+        $chain ? [$failed, new ReportingWork('must.not.run')] : $failed,
+        new ReportingWork('good'),
+    ])->dispatch();
+    artisan('queue:work', ['--once' => true, '--sleep' => 0])->assertSuccessful();
+    expect($ticket->run()->failed_count)->toBe(0)->and($ticket->run()->finished())->toBeFalse();
+    artisan('queue:work', ['--stop-when-empty' => true, '--sleep' => 0])->assertSuccessful();
+    $run = $ticket->run();
+    expect($run->status)->toBe(RunStatus::Partial)->and($run->done)->toBe(2)
+        ->and($run->failed_count)->toBe(1)->and($run->succeeded_count)->toBe(1)
+        ->and($run->items()->failed()->first()->code)->toBe('run.job_failed')
+        ->and($run->toJson())->not->toContain('private customer content')
+        ->and(DB::table('work_results')->pluck('label')->all())->not->toContain('must.not.run');
+})->with([true, false]);
+
+it('settles a batch chain as one item only when its final member completes', function () {
+    $ticket = Docket::batch([[new ReportingWork('first'), new ReportingWork('last')]])->dispatch();
+    artisan('queue:work', ['--once' => true, '--sleep' => 0])->assertSuccessful();
+    expect($ticket->run()->done)->toBe(0)->and($ticket->run()->finished())->toBeFalse();
+    artisan('queue:work', ['--once' => true, '--sleep' => 0])->assertSuccessful();
+    expect($ticket->run()->done)->toBe(1)->and($ticket->run()->items()->pluck('key')->all())->toBe(['first'])
+        ->and($ticket->run()->status)->toBe(RunStatus::Succeeded);
+});
+
+it('ends queued fail immediately without retrying or running the rest of a chain', function () {
+    $ticket = Docket::chain([new ReportingWork('stop', 'stop'), new ReportingWork('must.not.run')])->dispatch();
+    artisan('queue:work', ['--stop-when-empty' => true, '--sleep' => 0])->assertSuccessful();
+    expect($ticket->run()->status)->toBe(RunStatus::Failed)
+        ->and($ticket->run()->error)->toBe(['code' => 'file.unsupported', 'params' => ['id' => 42]])
+        ->and($ticket->run()->logs()->count())->toBe(1)->and(DB::table('work_results')->count())->toBe(0)
+        ->and(Queue::size())->toBe(0)->and(Docket::current())->toBeNull();
+});
+
+it('supports docketable jobs without Queueable and keeps plain dispatch untracked', function (bool $sync) {
+    $pending = Docket::job(new PlainReportingWork);
+    $ticket = $sync ? $pending->dispatchSync() : $pending->dispatch();
+    Bus::dispatch(new PlainReportingWork);
+    artisan('queue:work', ['--stop-when-empty' => true, '--sleep' => 0])->assertSuccessful();
+    expect($ticket->run()->error['code'])->toBe('file.unsupported')
+        ->and(DB::table('work_results')->pluck('label')->all())->toBe(['plain']);
+})->with([true, false]);
+
+it('stops a cancelled queued run before handling and preserves completed item references', function () {
+    $ticket = Docket::batch([new ReportingWork('next')])->dispatch();
+    $run = $ticket->run();
+    $run->itemSucceeded('previous', result: 'file:1');
+    $run->update(['cancel_requested' => true]);
+    artisan('queue:work', ['--stop-when-empty' => true, '--sleep' => 0])->assertSuccessful();
+    expect($run->refresh()->status)->toBe(RunStatus::Cancelled)
+        ->and($run->results()->all())->toBe(['previous' => 'file:1'])
+        ->and($run->items()->pending()->count())->toBe(1)->and(DB::table('work_results')->count())->toBe(0);
+});
+
+it('counts duplicate keyed deliveries once and preserves successes after an unkeyed failure', function () {
+    $failed = new RecordWork('bad', 'fail');
+    $failed->tries = 1;
+    $ticket = Docket::batch([new ReportingWork('good'), new ReportingWork('good'), $failed, new ReportingWork('must.not.run')])->dispatch();
+    artisan('queue:work', ['--stop-when-empty' => true, '--sleep' => 0])->assertSuccessful();
+    expect($ticket->run()->status)->toBe(RunStatus::Failed)
+        ->and($ticket->run()->done)->toBe(1)->and($ticket->run()->succeeded_count)->toBe(1)
+        ->and(DB::table('work_results')->pluck('label')->all())->toBe(['good', 'bad']);
+});
+
+it('keeps keyed release attempts pending until they really complete', function () {
+    $ticket = Docket::job(new ReportingWork('released', 'release'))->dispatch();
+    artisan('queue:work', ['--once' => true, '--sleep' => 0])->assertSuccessful();
+    expect($ticket->run()->done)->toBe(0)->and($ticket->run()->items()->pending()->count())->toBe(1);
+    artisan('queue:work', ['--once' => true, '--sleep' => 0])->assertSuccessful();
+    expect($ticket->run()->done)->toBe(1)->and($ticket->run()->succeeded())->toBeTrue();
+});
+
+it('keeps inline runs open for added work and skips already succeeded keys', function () {
+    Event::fake([RunFinished::class]);
+    $ticket = Docket::run(function (Run $run) {
+        $run->itemSucceeded('done');
+        $run->add(collect([new ReportingWork('done'), new ReportingWork('next', 'add')]));
+
+        return 'inline-result';
+    });
+    expect($ticket->status)->toBe(RunStatus::Running)->and($ticket->result())->toBe('inline-result')
+        ->and(Queue::size())->toBe(1);
+    Event::assertNotDispatched(RunFinished::class);
+    artisan('queue:work', ['--once' => true, '--sleep' => 0])->assertSuccessful();
+    expect($ticket->run()->finished())->toBeFalse();
+    artisan('queue:work', ['--stop-when-empty' => true, '--sleep' => 0])->assertSuccessful();
+    expect($ticket->run()->status)->toBe(RunStatus::Succeeded)->and($ticket->run()->done)->toBe(3)
+        ->and(Run::count())->toBe(1)->and(DB::table('work_results')->pluck('label')->all())->toBe(['next', 'added']);
+    Event::assertDispatchedTimes(RunFinished::class, 1);
+});
+
+it('dispatches added work synchronously when the run used dispatchSync', function () {
+    $ticket = Docket::job(new ReportingWork('first', 'add'))->dispatchSync();
+    expect($ticket->status)->toBe(RunStatus::Succeeded)->and($ticket->run()->done)->toBe(2)
+        ->and(Queue::size())->toBe(0)->and(Run::count())->toBe(1)
+        ->and(DB::table('work_results')->pluck('label')->all())->toBe(['added', 'first']);
+});
+
+it('keeps synchronous keyed failures local to their item and continues the batch', function () {
+    // Native sync batches hold a write transaction; SQLite needs a separate reporting database.
+    config(['database.connections.records' => ['driver' => 'sqlite', 'database' => ':memory:'], 'docket.connection' => 'records']);
+    $migration = require __DIR__.'/../../database/migrations/2026_10_13_000000_create_docket_tables.php';
+    $migration->up();
+    Exceptions::fake([RuntimeException::class]);
+    $ticket = Docket::batch([[new ReportingWork('bad', 'fail'), new ReportingWork('must.not.run')], new ReportingWork('good')])->dispatchSync();
+    expect($ticket->status)->toBe(RunStatus::Partial)->and($ticket->run()->done)->toBe(2)
+        ->and($ticket->run()->failed_count)->toBe(1)->and($ticket->run()->succeeded_count)->toBe(1)
+        ->and(DB::table('work_results')->pluck('label')->all())->toBe(['bad', 'good']);
+    Exceptions::assertReported(RuntimeException::class);
+});
+
+it('defers added work until the application commits and records a rollback', function (bool $commit) {
+    DB::beginTransaction();
+    $ticket = Docket::run(fn (Run $run) => $run->add(new ReportingWork('added')));
+    expect(Queue::size())->toBe(0)->and($ticket->status)->toBe(RunStatus::Running);
+    if ($commit) {
+        DB::commit();
+        expect(Queue::size())->toBe(1)->and($ticket->run()->finished())->toBeFalse();
+        artisan('queue:work', ['--stop-when-empty' => true, '--sleep' => 0])->assertSuccessful();
+        expect($ticket->run()->status)->toBe(RunStatus::Succeeded);
+    } else {
+        DB::rollBack();
+        expect(Queue::size())->toBe(0)->and($ticket->run()->error['code'])->toBe('run.rolled_back');
+    }
+})->with([true, false]);

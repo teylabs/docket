@@ -6,6 +6,8 @@ use Illuminate\Queue\Events\JobFailed;
 use Illuminate\Queue\Events\JobProcessed;
 use Illuminate\Queue\Events\JobProcessing;
 use Illuminate\Support\Facades\Bus;
+use Tey\Docket\ItemStatus;
+use Tey\Docket\Reporting\Reporter;
 use Tey\Docket\Run;
 use Tey\Docket\RunStatus;
 use WeakMap;
@@ -21,17 +23,25 @@ class Tracking
         $this->jobs = new WeakMap;
     }
 
-    public function attach(object $job, string $runId, bool $finishes): object
+    public function attach(object $job, Marker $marker): object
     {
         $job = clone $job;
-        $marker = new Marker($runId, $finishes);
         $this->jobs[$job] = $marker;
+
+        if (method_exists($job, 'attachDocket')) {
+            $job->attachDocket($marker, ! method_exists($job, 'through'));
+        }
 
         if (method_exists($job, 'through')) {
             $job->through([...($job->middleware ?? []), $marker]);
         }
 
         return $job;
+    }
+
+    public function marker(object $job): Marker
+    {
+        return $this->jobs[$job];
     }
 
     /**
@@ -57,6 +67,8 @@ class Tracking
         return $marker === null ? [] : ['docket' => [
             'id' => $marker->runId,
             'finishes' => $marker->finishes,
+            'work_id' => $marker->workId,
+            'item_key' => $marker->itemKey,
             'batch_id' => $job->batchId ?? null,
         ]];
     }
@@ -78,9 +90,14 @@ class Tracking
     {
         $metadata = $event->job->payload()['docket'] ?? null;
 
-        if (is_array($metadata) && is_string($metadata['id']) && $metadata['finishes'] && ! $event->job->isReleased() && ! $event->job->hasFailed()) {
+        if (is_array($metadata) && is_string($metadata['id']) && is_string($metadata['work_id']) && $metadata['finishes'] && ! $event->job->isReleased() && ! $event->job->hasFailed()) {
             $run = Run::findOrFail($metadata['id']);
-            app(Lifecycle::class)->finish($run->id, $run->failed_count > 0 || $run->skipped_count > 0 ? RunStatus::Partial : RunStatus::Succeeded);
+
+            if (is_string($metadata['item_key'])) {
+                app(Reporter::class)->settle($run, $metadata['item_key'], ItemStatus::Succeeded);
+            }
+
+            app(Work::class)->complete($run->id, $metadata['work_id']);
         }
     }
 
@@ -88,7 +105,14 @@ class Tracking
     {
         $metadata = $event->job->payload()['docket'] ?? null;
 
-        if (is_array($metadata) && is_string($metadata['id'])) {
+        if (is_array($metadata) && is_string($metadata['id']) && is_string($metadata['work_id'])) {
+            if (is_string($metadata['item_key'])) {
+                app(Reporter::class)->settle(Run::findOrFail($metadata['id']), $metadata['item_key'], ItemStatus::Failed, code: 'run.job_failed');
+                app(Work::class)->complete($metadata['id'], $metadata['work_id']);
+
+                return;
+            }
+
             app(Lifecycle::class)->finish($metadata['id'], RunStatus::Failed, ['code' => 'run.failed', 'params' => []]);
 
             if (is_string($metadata['batch_id'])) {

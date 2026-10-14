@@ -5,6 +5,8 @@ namespace Tey\Docket;
 use Closure;
 use Tey\Docket\Dispatch\Lifecycle;
 use Tey\Docket\Dispatch\Transactions;
+use Tey\Docket\Dispatch\Work;
+use Tey\Docket\Exceptions\RunCancelled;
 use Tey\Docket\Exceptions\RunFailed;
 use Throwable;
 
@@ -13,11 +15,13 @@ class InlineRunner
 {
     public function execute(Run $run, Closure $callback): Ticket
     {
-        $completion = new InlineCompletion($run->id);
+        $completion = new InlineCompletion($run->id, app(Work::class)->reserve($run));
         app(Transactions::class)->dispatch($run->id, $completion->committed(...));
 
         try {
             $result = app(CurrentRun::class)->during($run, $callback);
+        } catch (RunCancelled) {
+            return $run->refresh()->ticket()->withResult(null);
         } catch (Throwable $exception) {
             $error = $exception instanceof RunFailed
                 ? ['code' => $exception->failureCode, 'params' => $exception->params]

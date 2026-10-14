@@ -11,7 +11,8 @@ Implemented for 0.1, unreleased ([#4](https://github.com/teylabs/docket/issues/4
 - [x] `Run::toArray()` as the v1 status snapshot, with persisted progress and child counters.
 - [x] `RunStatus`, `Item`, `ItemStatus`, `Log` and `HasRuns` (`runs()` and `latestRun()`).
 - [x] `Progress` (`done`, `total`, `percent` and its string form).
-- [ ] Reporting (except inline `fail()`) and control methods.
+- [x] Reporting methods (#7).
+- [ ] Cancel and retry control methods (#10).
 - [ ] Tree traversal and automatic progress/status roll-up; the persisted counters are ready for these updates.
 - [ ] Package routes and the default policy.
 
@@ -20,7 +21,7 @@ Implemented for 0.1, unreleased ([#5](https://github.com/teylabs/docket/issues/5
 - [x] `Docket::job()`, `batch()`, `chain()`, `dispatch()` and `dispatchSync()`; independent option starters.
 - [x] `PendingRun::name()`, `about()`, `by()`, `unique()`, `idempotencyKey()`, `total()`, `staleAfter()`, `expiresAt()`, `then()`, `catch()` and `finally()`.
 - [x] Default names, authenticated initiators, keyed batch totals, native Laravel jobs, batches and chains, and enqueueing after commit with `run.rolled_back` on rollback.
-- [x] `PendingRun::dispatch()` and `dispatchSync()`, final status, expiry timestamps and completion callbacks. Item settlement and added work follow in #7; staleness reaping follows in #10.
+- [x] `PendingRun::dispatch()` and `dispatchSync()`, final status, expiry timestamps and completion callbacks. Item settlement and added work are implemented in #7; staleness reaping follows in #10.
 - [x] `Run::ticket()` and `Ticket`'s readonly fields, `run()`, `toArray()`, `jsonSerialize()` and JSON `toResponse()`; PHP serialization carries the ticket fields only.
 - [x] `RunDispatched` and `RunFinished`, after Docket's commit, with stable event ids.
 - [ ] Browser redirects and rendered progress surfaces (0.2).
@@ -32,11 +33,26 @@ Implemented for 0.1, unreleased ([#6](https://github.com/teylabs/docket/issues/6
 - [x] Exceptions record `run.exception` and log only the class, then rethrow unchanged. Inline `Run::fail()` throws `RunFailed` with the supplied code and params.
 - [x] Inline work executes immediately inside an application transaction; successful completion waits for commit, and rollback records `run.rolled_back` on Docket's connection.
 - [x] `Docket::current()` uses a scoped stack that unwinds in `finally`, with queue exit resets and Octane request, task and tick boundary resets. Synchronous queue work restores its caller's stack.
-- [ ] `Docketable` and queued `fail()` semantics (#7), parent/child persistence and roll-up (#8), depth and loop protection (#9), and progress bars (0.2). Nested inline calls currently restore the stack but do not form a stored tree.
+- [ ] Parent/child persistence and roll-up (#8), depth and loop protection (#9), and progress bars (0.2). Nested inline calls currently restore the stack but do not form a stored tree.
+
+Implemented for 0.1, unreleased ([#7](https://github.com/teylabs/docket/issues/7)):
+
+- [x] `Docketable::docket()`, with the same object as `Docket::current()` during handling, and `null` on untracked jobs.
+- [x] `track()`, eager declarations and totals, lazy declarations, succeeded-key skipping (including `retry_of_run_id`), implicit success and unsettled items on `break` or exceptions.
+- [x] Item outcomes, weighted success counts, reference results and stable, after-commit `ItemFinished` events. The first outcome for a key wins; repeated reports never count twice.
+- [x] Keyed jobs and batch chains (keyed by their first job); final keyed failures record `run.job_failed` on the item, while unkeyed failures end the run as `run.failed`.
+- [x] `total()`, `step()`, `log()`, `result()`, `checkpoint()`, `add()`, queued `fail()` and `throwIfCancelled()`.
+- [x] Added work keeps its run open, queues after commit, and runs synchronously under `dispatchSync()`. Internal `docket_work` records make completion safe to repeat without storing jobs in memory.
+- [x] Structural limits: params have up to 20 string-keyed scalar/null entries and at most 4,096 encoded JSON bytes. Checkpoints are scalar/null or a flat array of scalar/null values, at most 4,096 encoded JSON bytes. Invalid values throw `InvalidArgumentException` before writing. The snapshot includes at most 20 newest item results.
+- [ ] `withFakeDocket()` (#11), creation of retries and checkpoint inheritance (#10), and loop protection for added work (#9).
+
+`track()` skips succeeded keys, as specified in the README, not every terminal outcome. Arrays and eager collections declare immediately even when the returned generator is not iterated. Lazy inputs declare only as reached and do not infer a total. An explicit `total()` wins over inferred totals. The optional key in `itemFailed()` and `itemSkipped()` requires a PHP default for the following code parameter; omitting the code is rejected by validation. Success codes such as `created` are accepted, along with dotted codes; `run.` is reserved. Item result references accept strings or integer ids and are stored as strings.
+
+Cancellation stops at the next safe point, preserving completed items. Inline execution returns a cancelled ticket; queued execution stops without a retry. Reporting does not change a finished run. Synchronous keyed exceptions are reported to Laravel's exception handler and settle only their item, so other batch members can finish.
 
 An explicit name passed to `run()` takes precedence over `name()`; the closure-only form keeps `name()` or defaults to `closure`. A reused unique or idempotent run does not execute the closure again and cannot recover an earlier in-process result. An exception failure is final and is not replaced by a later rollback.
 
-With `connection => null`, Docket opens a separate connection using the default database's configuration. SQLite `:memory:` databases belong to one connection, so use file-backed SQLite when application and Docket records need to share a database. SQLite also permits only one writer at a time; use a separate Docket database if the application must hold a write transaction while Docket writes.
+With `connection => null`, Docket opens a separate connection using the default database's configuration. SQLite `:memory:` databases belong to one connection, so use file-backed SQLite when application and Docket records need to share a database. SQLite also permits only one writer at a time; use a separate Docket database if the application must hold a write transaction while Docket writes, including native synchronous batches that report items or logs.
 
 ### Facade `Tey\Docket\Facades\Docket`
 

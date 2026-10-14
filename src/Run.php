@@ -14,7 +14,7 @@ use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 use Tey\Docket\Database\Model;
-use Tey\Docket\Exceptions\RunFailed;
+use Tey\Docket\Reporting\ReportsWork;
 
 /**
  * @api
@@ -48,6 +48,7 @@ use Tey\Docket\Exceptions\RunFailed;
  * @property int $children_partial
  * @property int $children_failed
  * @property Carbon $created_at
+ * @property Carbon $updated_at
  * @property Carbon|null $finished_at
  * @property Carbon|null $expires_at
  * @property-read Progress $progress
@@ -55,16 +56,7 @@ use Tey\Docket\Exceptions\RunFailed;
 class Run extends Model
 {
     use HasUlids;
-
-    /** @param array<string, scalar|null> $params */
-    public function fail(string $code, array $params = []): void
-    {
-        if (str_starts_with($code, 'run.')) {
-            throw new InvalidArgumentException('The run. code prefix is reserved for Docket.');
-        }
-
-        throw new RunFailed($code, $params);
-    }
+    use ReportsWork;
 
     protected $table = 'docket_runs';
 
@@ -109,6 +101,10 @@ class Run extends Model
         return [
             'status' => RunStatus::class,
             'revision' => 'integer',
+            'step' => 'string',
+            'result' => 'string',
+            'total_explicit' => 'boolean',
+            'dispatch_sync' => 'boolean',
             'done' => 'integer',
             'total' => 'integer',
             'succeeded_count' => 'integer',
