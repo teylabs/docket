@@ -1,8 +1,10 @@
 # Changelog
 
-## Unreleased
+## [0.1.1] - 2026-10-15
 
 ### Fixed
+
+- Handle empty current-run stacks explicitly and avoid the deprecated object-storage membership method.
 
 - Keep generated database connections stable during migration default switches so failed migration writes roll back on the same connection. (#33)
 - Create the run primary key before its self-referencing foreign keys when migrating PostgreSQL databases. (#35)

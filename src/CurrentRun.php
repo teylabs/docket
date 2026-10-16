@@ -31,7 +31,9 @@ class CurrentRun
 
     public function current(): ?Run
     {
-        return $this->stack[array_key_last($this->stack)] ?? null;
+        $key = array_key_last($this->stack);
+
+        return $key === null ? null : $this->stack[$key];
     }
 
     public function during(Run $run, Closure $callback): mixed

@@ -47,7 +47,7 @@ class Fingerprint
         }
 
         if (is_object($value)) {
-            if ($seen->contains($value)) {
+            if ($seen->offsetExists($value)) {
                 return ['reference', $seen[$value]];
             }
 
