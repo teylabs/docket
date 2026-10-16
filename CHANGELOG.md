@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Keep generated database connections stable during migration default switches so failed migration writes roll back on the same connection. (#33)
+
 ## [0.1.0] - 2026-10-14
 
 ### Added
