@@ -17,7 +17,8 @@ return new class extends Migration
         $schema = Schema::connection($this->getConnection());
 
         $schema->create('docket_runs', function (Blueprint $table) {
-            $table->ulid('id')->primary();
+            $table->ulid('id');
+            $table->primary('id');
             $table->string('token', 64)->unique();
             $table->string('name')->index();
             $table->string('status')->default('queued')->index();

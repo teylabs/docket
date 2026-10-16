@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Fixed
+
+- Create the run primary key before its self-referencing foreign keys when migrating PostgreSQL databases. (#35)
+
 ## [0.1.0] - 2026-10-14
 
 ### Added
