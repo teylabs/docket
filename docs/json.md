@@ -14,6 +14,7 @@ All timestamps are ISO 8601 UTC. Responses send `Cache-Control: private, no-stor
 - [x] `linkedTo()` populates `linked_from_run_id` on a new root without changing the original's counters or status ([#9](https://github.com/teylabs/docket/issues/9), 0.1.0). Fingerprints and work input are never snapshot or ticket fields.
 - [x] Cancellation sets `cancel_requested` until completion; retries populate `retry_of_run_id` and inherit successful progress. Reaping exposes `run.stalled`; expiry deletes only finished runs (#10). Replay input, checkpoints, batch ids and heartbeat timestamps remain private storage, not JSON fields.
 - [x] HTTP routes, private/no-store response headers, initiator-only default policy, current-viewer action links and access checks on every request (#12).
+- [x] Opt-in subject/tenant policy applies to route access, action links and child filtering without changing any JSON fields. Tenant and subject attributes remain private; 404/403 and state restrictions are unchanged (#38, unreleased 0.2).
 
 | Field | Type | Null | Meaning |
 | --- | --- | --- | --- |

@@ -6,6 +6,7 @@
 > [!NOTE]
 > Docket 0.1 is released. This README describes the accepted design for 0.1–0.3; [docs/reference.md](docs/reference.md) tags every entry with the milestone it lands in.
 > 0.1 ships the runs, items and logs schema, queued and inline runs, JSON tickets, reporting from the work, run trees, loop protection, cancel/retry, pruning, testing fakes, the package JSON routes and the default policy. Rendered progress surfaces and the watch page (0.2) and external workers (0.3) are not implemented yet.
+> Opt-in tenant-scoped authorization is implemented for 0.2 but not released.
 
 Docket wraps any piece of work in your Laravel app, from one statement to a queued import of a million rows, in a run: a durable record that it happened, with a ticket you can hand to a page, a console or an API client. Code running inside the work, down to a model observer, can report to the run as it goes. Long work usually means a spinner, a status column, a progress table and a polling endpoint written for each feature. With Docket, each one reads the same status, even after a reload, and can retry only the rows that failed.
 
@@ -1107,7 +1108,28 @@ php artisan docket:watch rows.import
 
 Docket checks access with a Laravel policy for `Tey\Docket\Run`. The policy it ships allows `view`, `cancel` and `retry` only for the run's initiator. Runs started from the scheduler have no initiator, so they are hidden until you register your own policy.
 
-Most apps grant access through the subject:
+### Tenant-Scoped Access
+
+Register the built-in `SubjectRunPolicy` to grant access through the run's `about()` subject, including runs with no initiator:
+
+```php
+// app/Providers/AppServiceProvider.php, boot()
+use Illuminate\Support\Facades\Gate;
+use Tey\Docket\Policies\SubjectRunPolicy;
+use Tey\Docket\Run;
+
+Gate::policy(Run::class, SubjectRunPolicy::class);
+```
+
+For runs about a workspace, use `->about($workspace)`. Its Laravel policy decides membership: Docket delegates `view` to `view` on the workspace, and `cancel` and `retry` to `update`. Members who may only view it can follow progress but cannot cancel or retry. Package control routes require `view` as well.
+
+If the subject belongs to a tenant instead of being the tenant itself, register a [subject resolver](docs/reference.md#authorization) to return that tenant. This replaces an application-side `Run` policy without adding a tenant column to runs.
+
+This policy replaces the initiator rule; it does not add to it. Guests, missing or deleted subjects, and subjects without an allowing policy are denied. A resolver returning `null` also denies access. Each check reads the stored subject again and evaluates the requested viewer's permissions, so membership revocation takes effect on the next poll. Children are checked independently, not granted access through their parent. No tenant attributes are added to tickets or snapshots.
+
+### Custom Policies
+
+Register an application policy when you need different abilities or access rules:
 
 ```php
 <?php
