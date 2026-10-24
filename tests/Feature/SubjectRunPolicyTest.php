@@ -4,7 +4,6 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\Relation;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\Gate;
-use Illuminate\Support\Facades\Queue;
 use Illuminate\Support\Facades\Schema;
 use Tey\Docket\Facades\Docket;
 use Tey\Docket\Policies\RunPolicy;
@@ -17,11 +16,22 @@ use Tey\Docket\Tests\Fixtures\Workspace;
 use Tey\Docket\Tests\Fixtures\WorkspacePolicy;
 
 use function Pest\Laravel\actingAs;
+use function Pest\Laravel\artisan;
 use function Pest\Laravel\getJson;
 use function Pest\Laravel\json;
 use function Pest\Laravel\postJson;
 
 beforeEach(function () {
+    config(['queue.default' => 'database', 'queue.failed.driver' => null]);
+    Schema::create('jobs', function (Blueprint $table) {
+        $table->bigIncrements('id');
+        $table->string('queue')->index();
+        $table->longText('payload');
+        $table->unsignedTinyInteger('attempts');
+        $table->unsignedInteger('reserved_at')->nullable();
+        $table->unsignedInteger('available_at');
+        $table->unsignedInteger('created_at');
+    });
     foreach (['users', 'workspaces', 'uploads'] as $name) {
         Schema::create($name, function (Blueprint $table) use ($name) {
             $table->id();
@@ -46,7 +56,6 @@ beforeEach(function () {
     $workspace->members()->attach($reader);
     $otherWorkspace->members()->attach($outsider, ['can_manage' => true]);
     Gate::policy(Workspace::class, WorkspacePolicy::class);
-    Queue::fake();
 });
 
 it('keeps initiator-only access until the subject policy is registered', function () {
@@ -65,10 +74,18 @@ it('keeps initiator-only access until the subject policy is registered', functio
     getJson('/docket/runs/'.$scheduled->token)->assertNotFound();
 });
 
-it('lets tenant managers read and cancel initiator-less work and retry it with the same subject', function () {
+it('lets tenant managers read and cancel initiator-less work and retry it with the same subject', function (bool $separateDatabase) {
+    if ($separateDatabase) {
+        config(['database.connections.records' => ['driver' => 'sqlite', 'database' => ':memory:'], 'docket.connection' => 'records']);
+        $migration = require __DIR__.'/../../database/migrations/2026_10_13_000000_create_docket_tables.php';
+        $migration->up();
+    }
     Gate::policy(Run::class, SubjectRunPolicy::class);
     $workspace = Workspace::findOrFail(1);
-    $run = Docket::job(static fn () => null)->about($workspace)->by(null)->dispatch()->run();
+    $run = Docket::job(static function (Run $run) {
+        $run->throwIfCancelled();
+        $run->result('workspace:ready');
+    })->about($workspace)->by(null)->dispatch()->run();
     $run->logs()->create(['code' => 'work.queued']);
     $run->items()->create(['key' => 'row:1']);
     actingAs(User::findOrFail(1));
@@ -78,14 +95,18 @@ it('lets tenant managers read and cancel initiator-less work and retry it with t
     getJson('/docket/runs/'.$run->token.'/logs')->assertOk()->assertJsonPath('data.0.code', 'work.queued');
     postJson('/docket/runs/'.$run->token.'/cancel')->assertOk()->assertJsonPath('cancel_requested', true);
 
-    $run->update(['status' => RunStatus::Cancelled, 'finished_at' => now()]);
+    artisan('queue:work', ['--once' => true, '--sleep' => 0])->assertSuccessful();
+    expect($run->refresh()->status)->toBe(RunStatus::Cancelled);
     $response = postJson('/docket/runs/'.$run->token.'/retry')->assertAccepted();
     $retry = Run::findOrFail($response->json('id'));
     expect($retry->retry_of_run_id)->toBe($run->id)
         ->and($retry->initiator)->toBeNull()
         ->and($retry->subject->is($workspace))->toBeTrue();
     getJson('/docket/runs/'.$retry->token)->assertOk();
-});
+    artisan('queue:work', ['--once' => true, '--sleep' => 0])->assertSuccessful();
+    expect($retry->refresh()->status)->toBe(RunStatus::Succeeded)
+        ->and($retry->result)->toBe('workspace:ready');
+})->with(['default database' => false, 'separate Docket database' => true]);
 
 it('separates tenant read permission from control permission', function () {
     Gate::policy(Run::class, SubjectRunPolicy::class);
@@ -97,6 +118,19 @@ it('separates tenant read permission from control permission', function () {
     $run->update(['status' => RunStatus::Failed, 'finished_at' => now()]);
     expect($run->ticket()->toArray()['links'])->not->toHaveKey('retry');
     postJson('/docket/runs/'.$run->token.'/retry')->assertForbidden();
+    expect(Run::count())->toBe(1)->and($run->refresh()->cancel_requested)->toBeFalse();
+});
+
+it('requires view permission on control routes even when the subject allows updates', function () {
+    Gate::policy(Run::class, SubjectRunPolicy::class);
+    Gate::before(fn (?User $user, string $ability, array $arguments): ?bool => ($arguments[0] ?? null) instanceof Workspace && $ability === 'view' ? false : null);
+    actingAs(User::findOrFail(1));
+    $run = Docket::job(static fn () => null)->about(Workspace::findOrFail(1))->by(null)->dispatch()->run();
+
+    expect(Gate::allows('view', $run))->toBeFalse()->and(Gate::allows('cancel', $run))->toBeTrue();
+    postJson('/docket/runs/'.$run->token.'/cancel')->assertNotFound();
+    $run->update(['status' => RunStatus::Failed, 'finished_at' => now()]);
+    postJson('/docket/runs/'.$run->token.'/retry')->assertNotFound();
     expect(Run::count())->toBe(1)->and($run->refresh()->cancel_requested)->toBeFalse();
 });
 
@@ -147,7 +181,9 @@ it('denies absent deleted and unrecognized subjects without falling back to the 
 
 it('resolves a tenant from the stored subject through a container-bound policy', function () {
     app()->bind(SubjectRunPolicy::class, fn () => new SubjectRunPolicy(
-        fn (Model $subject): ?Model => Workspace::find($subject->getAttribute('workspace_id')),
+        resolveSubject: fn (Model $subject): ?Model => $subject instanceof Upload
+            ? Workspace::find($subject->getAttribute('workspace_id'))
+            : null,
     ));
     Gate::policy(Run::class, SubjectRunPolicy::class);
     $manager = User::findOrFail(1);
@@ -165,6 +201,24 @@ it('resolves a tenant from the stored subject through a container-bound policy',
 
     $upload->update(['workspace_id' => null]);
     expect(Gate::forUser($manager)->allows('view', $run))->toBeFalse();
+    $upload->update(['workspace_id' => 999]);
+    expect(Gate::forUser($manager)->allows('view', $run))->toBeFalse();
+    $unsupported = Docket::job(static fn () => null)->about(Workspace::findOrFail(1))->by($manager)->dispatch()->run();
+    expect(Gate::forUser($manager)->allows('view', $unsupported))->toBeFalse();
+});
+
+it('propagates resolver failures without granting initiator access', function () {
+    app()->bind(SubjectRunPolicy::class, fn () => new SubjectRunPolicy(
+        fn (Model $subject): ?Model => throw new RuntimeException('Tenant lookup failed.'),
+    ));
+    Gate::policy(Run::class, SubjectRunPolicy::class);
+    $run = Docket::job(static fn () => null)->about(Workspace::findOrFail(1))->by(User::findOrFail(1))->dispatch()->run();
+    $manager = User::findOrFail(1);
+
+    foreach (['view', 'cancel', 'retry'] as $ability) {
+        expect(fn () => Gate::forUser($manager)->allows($ability, $run))->toThrow(RuntimeException::class, 'Tenant lookup failed.');
+    }
+    expect($run->refresh()->cancel_requested)->toBeFalse()->and(Run::count())->toBe(1);
 });
 
 it('rechecks membership and subject changes for reused tickets and before poll throttling', function () {
