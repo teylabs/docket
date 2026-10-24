@@ -336,6 +336,45 @@ Schedule::command('docket:prune --expired')->daily();
 
 Check stale runs every minute so lost children do not leave parents waiting. Delete expired runs daily to avoid scanning finished runs and invoking `RunExpiring` cleanup listeners every minute.
 
+### Authorization
+
+Implemented for 0.2, unreleased (#38):
+
+- [x] Opt-in `Tey\Docket\Policies\SubjectRunPolicy`, registered with `Gate::policy(Run::class, SubjectRunPolicy::class)`. The default `Tey\Docket\Policies\RunPolicy` remains initiator-only.
+- [x] Subject-based access to initiator-less runs, tenant resolution through the container, and separate read/control permissions using Laravel policies.
+- [x] Current-viewer action links, membership revocation, independently filtered children and trees, and unchanged ticket/snapshot fields.
+
+| Signature | Meaning | Ms |
+| --- | --- | --- |
+| `SubjectRunPolicy::__construct(?Closure $resolveSubject = null)` | Optional `Closure(Model $subject): ?Model` maps the stored `about()` subject to the model whose policy grants access, such as its tenant. Without a resolver, authorize the subject itself. | 0.2 |
+| `view(Authenticatable $user, Run $run): bool` | Check the resolved subject's `view` ability for `$user`. | 0.2 |
+| `cancel(Authenticatable $user, Run $run): bool` | Check the resolved subject's `update` ability for `$user`. | 0.2 |
+| `retry(Authenticatable $user, Run $run): bool` | Check the resolved subject's `update` ability for `$user`. | 0.2 |
+
+For an upload with a `workspace_id`, bind a resolver and register the policy in your provider's `boot()`:
+
+```php
+// app/Providers/AppServiceProvider.php, boot()
+use App\Models\Upload;
+use App\Models\Workspace;
+use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Facades\Gate;
+use Tey\Docket\Policies\SubjectRunPolicy;
+use Tey\Docket\Run;
+
+$this->app->bind(SubjectRunPolicy::class, fn () => new SubjectRunPolicy(
+    resolveSubject: fn (Model $subject): ?Model => $subject instanceof Upload
+        ? Workspace::find($subject->getAttribute('workspace_id'))
+        : null,
+));
+
+Gate::policy(Run::class, SubjectRunPolicy::class);
+```
+
+The workspace's `view` and `update` policies decide membership and control access. The resolver receives a freshly read subject on every check, on the subject's application connection, including morph aliases. It is not called when the subject is absent or deleted. Return `null` for an unsupported subject or missing tenant; access is denied without falling back to the initiator. Resolver exceptions propagate through Laravel's normal exception handling.
+
+The policy requires an authenticated viewer and uses that viewer, including an explicit `tree($viewer)` or `Gate::forUser($viewer)`, rather than the ambient signed-in user. Laravel's gate hooks and application policy registration still apply. Package cancel/retry routes check `view` first, so permission to update a subject alone cannot reveal or control a hidden run. Existing status, expiry and replay restrictions remain in force. Use an application `Run` policy for different ability mappings; this policy adds no configuration keys, schema columns or JSON fields.
+
 ### Routes
 
 The table in the README. Package JSON routes: 0.1. The watch page: 0.2. The external update route `POST /docket/runs/{id}/updates` (writer grants): 0.3.

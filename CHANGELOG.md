@@ -5,6 +5,7 @@
 ### Added
 
 - Prune stale and expired runs on separate schedules with `docket:prune --stale` and `--expired`, while keeping both jobs enabled when neither or both options are supplied. (#39)
+- Scope run access through an opt-in subject policy and tenant resolver, retaining initiator-only defaults and Laravel's view/update permissions. (#38)
 
 ## [0.1.1] - 2026-10-15
 
