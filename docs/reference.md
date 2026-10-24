@@ -318,7 +318,23 @@ Each has `string $id` (stable, for deduplication) and `Run $run`. Delivery is at
 | Command | Meaning | Ms |
 | --- | --- | --- |
 | `docket:prune` | Delete expired runs (items and logs cascade); fail stale runs as `run.stalled`. | 0.1 |
+| `docket:prune --stale` | Fail stale runs only, without deleting expired runs. | 0.2 |
+| `docket:prune --expired` | Delete expired finished runs only, without failing stale runs. | 0.2 |
 | `docket:watch {run} {--depth=1}` | Follow a run by token, or the newest run with that name, until it finishes. Prints the root's roll-up, then one line per child (to `--depth` levels) with status, progress and latest log entry. | 0.2 |
+
+Implemented for 0.2 (#39):
+
+- [x] Prune stale and expired runs on separate schedules. No options, or both options, runs both jobs in the existing order: stale first, then expired. Listener failures still leave expired runs available for the next invocation.
+
+```php
+// routes/console.php
+use Illuminate\Support\Facades\Schedule;
+
+Schedule::command('docket:prune --stale')->everyMinute();
+Schedule::command('docket:prune --expired')->daily();
+```
+
+Check stale runs every minute so lost children do not leave parents waiting. Delete expired runs daily to avoid scanning finished runs and invoking `RunExpiring` cleanup listeners every minute.
 
 ### Routes
 

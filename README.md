@@ -373,12 +373,12 @@ When identical work really should run again inside the same run, such as a delib
 ### Dockets Never Hang
 
 - A parent waits only for its own non-detached children, never for linked runs.
-- A child that dies silently (a killed worker, a lost job) is failed as `run.stalled` once `staleAfter` passes, by `docket:prune`, so its parent finishes.
+- A child that dies silently (a killed worker, a lost job) is failed as `run.stalled` once `staleAfter` passes, by `docket:prune --stale`, so its parent finishes.
 - The depth cap fails fast with `run.depth_exceeded` instead of creating more runs.
 - An exact repeat of work, by continuation or recursion, fails fast with `run.loop_detected`.
 - Linked and detached runs never hold anything open.
 
-So every run reaches a final status, as long as `docket:prune` is scheduled (see [Before Production](#before-production)).
+Schedule `docket:prune --stale` every minute so lost children do not leave parents waiting. Run `docket:prune --expired` daily for retention cleanup (see [Retention](#retention) and [Before Production](#before-production)).
 
 ### Tickets in a Tree
 
@@ -1161,14 +1161,17 @@ An external worker, such as a Python page processor, reports through a writer gr
 
 A run and its items are deleted when they expire: `docket.ttl` after the run finishes, or at the time you set with `expiresAt()`. An unfinished run is never deleted; `staleAfter()` takes care of runs that stop reporting.
 
-`docket:prune` deletes expired runs and fails stale ones. Schedule it every minute:
+Schedule stale-run checks every minute and expired-run deletion daily:
 
 ```php
 // routes/console.php
 use Illuminate\Support\Facades\Schedule;
 
-Schedule::command('docket:prune')->everyMinute();
+Schedule::command('docket:prune --stale')->everyMinute();
+Schedule::command('docket:prune --expired')->daily();
 ```
+
+`--stale` only fails stale runs; `--expired` only deletes expired finished runs. Frequent stale-run checks let waiting parents finish promptly. Daily expiry cleanup avoids scanning finished runs and invoking file-cleanup listeners every minute. With neither option, or with both, `docket:prune` does both jobs, failing stale runs before deleting expired ones.
 
 Docket stores references, never content: ids, paths and codes your app resolves. Deleting the files those references point to is your app's job: listen for `RunExpiring`, which `docket:prune` fires before it deletes a run.
 
@@ -1226,7 +1229,8 @@ The fake records what the job reported. It doesn't prove queueing, final status,
 
 | Check | Why |
 | --- | --- |
-| Schedule `docket:prune` every minute, on a host that runs even when queue workers scale to zero | Expired runs are deleted and stale runs are failed only by this command. |
+| Schedule `docket:prune --stale` every minute, on a host that runs even when queue workers scale to zero | Fail stale runs promptly so waiting parents can finish. |
+| Schedule `docket:prune --expired` daily | Delete expired runs without scanning finished runs and invoking cleanup listeners every minute. See [Retention](#retention). |
 | Use a background queue driver, not `sync` | With `sync`, `dispatch()` runs the work before it returns, so there is no early response. |
 | Set `docket.ttl` for your data | Runs, items and logs stay until they expire. |
 | Register a `Run` policy | The default policy hides scheduled runs and anything not started by the viewer. |

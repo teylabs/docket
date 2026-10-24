@@ -12,6 +12,46 @@ use function Pest\Laravel\artisan;
 use function Pest\Laravel\freezeTime;
 use function Pest\Laravel\travel;
 
+it('prunes only the selected kinds of runs', function (string $options, bool $stale, bool $expired) {
+    freezeTime();
+    $unfinished = Run::create(['name' => 'stale', 'status' => RunStatus::Running, 'stale_after' => 10]);
+    $finished = Docket::expiresAt(now())->run(static function (Run $run) {
+        $run->itemSucceeded('one')->log('file.created');
+    })->run();
+    $unfinishedBefore = $unfinished->refresh()->getAttributes();
+    $finishedBefore = $finished->refresh()->getAttributes();
+    Event::fake([RunFinished::class, RunExpiring::class]);
+    travel(11)->seconds();
+
+    artisan('docket:prune'.$options)->assertSuccessful();
+
+    if ($stale) {
+        expect($unfinished->refresh()->failed())->toBeTrue()
+            ->and($unfinished->error)->toBe(['code' => 'run.stalled', 'params' => []]);
+        Event::assertDispatchedTimes(RunFinished::class, 1);
+    } else {
+        expect($unfinished->refresh()->getAttributes())->toBe($unfinishedBefore);
+        Event::assertNotDispatched(RunFinished::class);
+    }
+
+    if ($expired) {
+        expect(Run::find($finished->id))->toBeNull()
+            ->and($finished->items()->count())->toBe(0)
+            ->and($finished->logs()->count())->toBe(0);
+        Event::assertDispatchedTimes(RunExpiring::class, 1);
+    } else {
+        expect($finished->refresh()->getAttributes())->toBe($finishedBefore)
+            ->and($finished->items()->count())->toBe(1)
+            ->and($finished->logs()->count())->toBe(1);
+        Event::assertNotDispatched(RunExpiring::class);
+    }
+})->with([
+    'no options' => ['', true, true],
+    'stale only' => [' --stale', true, false],
+    'expired only' => [' --expired', false, true],
+    'both options' => [' --stale --expired', true, true],
+]);
+
 it('reaps queued and running runs only after their last report deadline and invokes completion once', function (RunStatus $status) {
     freezeTime();
     $run = Run::create(['name' => 'stale', 'status' => $status, 'stale_after' => 10]);
@@ -93,7 +133,7 @@ it('expires finished records by TTL or explicit expiry but never deletes unfinis
         ->and($ids)->toBe([$run->id.':expiring']);
 })->with([true, false]);
 
-it('keeps an expiring run when a listener fails and redelivers the stable event id', function () {
+it('keeps an expiring run when a listener fails and redelivers the stable event id', function (string $options) {
     $run = Docket::expiresAt(now())->run(static fn () => null)->run();
     $ids = [];
     Event::listen(RunExpiring::class, function (RunExpiring $event) use (&$ids) {
@@ -101,10 +141,10 @@ it('keeps an expiring run when a listener fails and redelivers the stable event 
         throw new RuntimeException('Cleanup failed.');
     });
     for ($attempt = 0; $attempt < 2; $attempt++) {
-        expect(fn () => artisan('docket:prune')->run())->toThrow(RuntimeException::class, 'Cleanup failed.');
+        expect(fn () => artisan('docket:prune'.$options)->run())->toThrow(RuntimeException::class, 'Cleanup failed.');
     }
     expect(Run::find($run->id))->not->toBeNull()->and($ids)->toBe([$run->id.':expiring', $run->id.':expiring']);
-});
+})->with(['', ' --expired', ' --stale --expired']);
 
 it('does not change a finished run when cancellation is requested', function (RunStatus $status) {
     $run = Run::create(['name' => 'finished', 'status' => $status]);
