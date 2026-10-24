@@ -13,11 +13,26 @@ use Tey\Docket\RunStatus;
 /** @internal */
 class Prune extends Command
 {
-    protected $signature = 'docket:prune';
+    protected $signature = 'docket:prune
+                            {--stale : Fail stale runs}
+                            {--expired : Delete expired runs}';
 
     protected $description = 'Fail stale runs and delete expired runs';
 
     public function handle(): int
+    {
+        if ($this->option('stale') || ! $this->option('expired')) {
+            $this->pruneStale();
+        }
+
+        if ($this->option('expired') || ! $this->option('stale')) {
+            $this->pruneExpired();
+        }
+
+        return self::SUCCESS;
+    }
+
+    private function pruneStale(): void
     {
         do {
             $reaped = 0;
@@ -38,14 +53,15 @@ class Prune extends Command
                 }, 5);
             }
         } while ($reaped > 0);
+    }
 
+    private function pruneExpired(): void
+    {
         foreach (Run::query()->finished()->where('expires_at', '<=', now())->lazyById() as $run) {
             // Synchronous listeners finish before deletion, outside a transaction.
             // A listener failure leaves the run available for the next invocation.
             Event::dispatch(new RunExpiring($run));
             Run::query()->whereKey($run->id)->finished()->where('expires_at', '<=', now())->delete();
         }
-
-        return self::SUCCESS;
     }
 }

@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Prune stale and expired runs on separate schedules with `docket:prune --stale` and `--expired`, while keeping both jobs enabled when neither or both options are supplied. (#39)
+
 ## [0.1.1] - 2026-10-15
 
 ### Fixed
