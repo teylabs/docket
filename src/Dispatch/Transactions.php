@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\Database\DatabaseTransactionsManager;
 use Illuminate\Database\Events\TransactionCommitted;
 use Illuminate\Database\Events\TransactionRolledBack;
+use Spatie\Multitenancy\Contracts\IsTenant;
 use Tey\Docket\RunStatus;
 
 /** @internal */
@@ -27,10 +28,32 @@ class Transactions
         }
 
         $this->pending[$id] = ['connection' => $transaction->connection, 'level' => $transaction->level];
-        $this->transactions->addCallback(function () use ($id, $callback): void {
+        $tenant = $this->currentTenant();
+        $this->transactions->addCallback(function () use ($id, $callback, $tenant): void {
             unset($this->pending[$id]);
-            $callback();
+
+            if ($tenant === null) {
+                $callback();
+
+                return;
+            }
+
+            // The commit may land after the dispatching tenant block has ended, so the enqueue re-enters that tenant; execute() restores the
+            // tenant current at commit in its own finally.
+            $tenant->execute(function () use ($callback): void {
+                $callback();
+            });
         });
+    }
+
+    /** The current spatie/laravel-multitenancy tenant, when that package is installed and configured; it is not a dependency. */
+    private function currentTenant(): ?IsTenant
+    {
+        if (! interface_exists(IsTenant::class) || ! app()->bound(IsTenant::class)) {
+            return null;
+        }
+
+        return app(IsTenant::class)::current();
     }
 
     public function committed(TransactionCommitted $event): void

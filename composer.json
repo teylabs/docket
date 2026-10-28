@@ -33,7 +33,11 @@
         "pestphp/pest-plugin-laravel": "^4.0",
         "phpstan/extension-installer": "^1.1",
         "phpstan/phpstan-deprecation-rules": "^2.0",
-        "phpstan/phpstan-phpunit": "^2.0"
+        "phpstan/phpstan-phpunit": "^2.0",
+        "spatie/laravel-multitenancy": "^4.0"
+    },
+    "suggest": {
+        "spatie/laravel-multitenancy": "Carries the current tenant through work dispatched inside a transaction (^4.0)."
     },
     "autoload": {
         "psr-4": {
