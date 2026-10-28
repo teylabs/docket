@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- Carry the current spatie/laravel-multitenancy tenant through work dispatched inside a database transaction, so a job enqueued after the outer commit keeps the tenant it was dispatched in, even when the tenant block ended first. The tenant current at commit is restored afterwards. Without the package, or with no current tenant, dispatch is unchanged.
+
 ### Added
 
 - Prune stale and expired runs on separate schedules with `docket:prune --stale` and `--expired`, while keeping both jobs enabled when neither or both options are supplied. (#39)
