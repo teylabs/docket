@@ -1,0 +1,220 @@
+{
+  "format": 1,
+  "package": {
+    "composer": "tey/docket"
+  },
+  "facts": [
+    {
+      "id": "has-queued-jobs",
+      "description": "The app dispatches queued jobs: a class implements ShouldQueue, or the app already tracks runs through Docket.",
+      "computed": {
+        "signals": [
+          {
+            "kind": "php-class",
+            "implements": [
+              "Illuminate\\Contracts\\Queue\\ShouldQueue",
+              "Tey\\Docket\\Docketable"
+            ]
+          },
+          {
+            "kind": "composer",
+            "packages": [
+              "tey/docket"
+            ]
+          }
+        ]
+      }
+    }
+  ],
+  "surfaces": [
+    {
+      "id": "jobs.run-tracking",
+      "layer": "backend",
+      "group": "jobs",
+      "label": "Run tracking for queued work",
+      "feature": "core",
+      "applies": "has-queued-jobs",
+      "uses": {
+        "classes": [
+          "Tey\\Docket\\Docket",
+          "Tey\\Docket\\Facades\\Docket",
+          "Tey\\Docket\\Docketable",
+          "Tey\\Docket\\HasRuns",
+          "Tey\\Docket\\PendingRun",
+          "Tey\\Docket\\Run",
+          "Tey\\Docket\\Ticket"
+        ]
+      },
+      "handRolled": [
+        {
+          "kind": "migration",
+          "tables": [
+            "job_statuses",
+            "job_status",
+            "job_progress",
+            "job_runs",
+            "job_logs",
+            "import_logs",
+            "export_logs",
+            "imports",
+            "exports",
+            "batch_progress",
+            "queue_monitor"
+          ]
+        },
+        {
+          "kind": "composer",
+          "packages": [
+            "imtigger/laravel-job-status",
+            "romanzipp/laravel-queue-monitor",
+            "croustibat/filament-jobs-monitor"
+          ]
+        },
+        {
+          "kind": "php-class",
+          "names": [
+            "*JobStatus",
+            "*JobProgress",
+            "*JobRun",
+            "*ImportLog",
+            "*ExportLog",
+            "*TracksProgress"
+          ]
+        }
+      ],
+      "replaces": {
+        "composer": [
+          "imtigger/laravel-job-status",
+          "romanzipp/laravel-queue-monitor",
+          "croustibat/filament-jobs-monitor"
+        ]
+      },
+      "docs": "docs/reference.md",
+      "status": "stable"
+    },
+    {
+      "id": "jobs.item-reporting",
+      "layer": "backend",
+      "group": "jobs",
+      "label": "Per-item results and logs for a run",
+      "feature": "core",
+      "applies": "has-queued-jobs",
+      "uses": {
+        "classes": [
+          "Tey\\Docket\\Reporting\\ReportsWork",
+          "Tey\\Docket\\Item",
+          "Tey\\Docket\\Log",
+          "Tey\\Docket\\Progress"
+        ]
+      },
+      "handRolled": [
+        {
+          "kind": "migration",
+          "tables": [
+            "import_errors",
+            "import_rows",
+            "import_failures",
+            "job_items",
+            "job_errors",
+            "failed_rows"
+          ]
+        },
+        {
+          "kind": "php-class",
+          "names": [
+            "*ImportError",
+            "*ImportRow",
+            "*ImportFailure",
+            "*RowError"
+          ]
+        }
+      ],
+      "docs": "docs/reference.md",
+      "status": "stable"
+    },
+    {
+      "id": "jobs.access",
+      "layer": "backend",
+      "group": "jobs",
+      "label": "Who may view and act on runs",
+      "feature": "core",
+      "applies": "has-queued-jobs",
+      "uses": {
+        "classes": [
+          "Tey\\Docket\\Policies\\RunPolicy",
+          "Tey\\Docket\\Policies\\SubjectRunPolicy"
+        ]
+      },
+      "handRolled": [
+        {
+          "kind": "php-class",
+          "names": [
+            "*JobStatusPolicy",
+            "*ImportPolicy",
+            "*ExportPolicy"
+          ]
+        }
+      ],
+      "docs": "docs/reference.md",
+      "status": "stable"
+    }
+  ],
+  "nonSurfaces": [
+    {
+      "ref": "Tey\\Docket\\DocketServiceProvider",
+      "reason": "Auto-discovered package wiring."
+    },
+    {
+      "ref": "Tey\\Docket\\RunStatus",
+      "reason": "A value type returned by runs."
+    },
+    {
+      "ref": "Tey\\Docket\\ItemStatus",
+      "reason": "A value type returned by items."
+    },
+    {
+      "ref": "Tey\\Docket\\Events\\ItemFinished",
+      "reason": "An event an app may listen to; listening is optional."
+    },
+    {
+      "ref": "Tey\\Docket\\Events\\LoopDetected",
+      "reason": "An event an app may listen to; listening is optional."
+    },
+    {
+      "ref": "Tey\\Docket\\Events\\RunDispatched",
+      "reason": "An event an app may listen to; listening is optional."
+    },
+    {
+      "ref": "Tey\\Docket\\Events\\RunExpiring",
+      "reason": "An event an app may listen to; listening is optional."
+    },
+    {
+      "ref": "Tey\\Docket\\Events\\RunFinished",
+      "reason": "An event an app may listen to; listening is optional."
+    },
+    {
+      "ref": "Tey\\Docket\\Exceptions\\DepthExceeded",
+      "reason": "Thrown by Docket, not adopted."
+    },
+    {
+      "ref": "Tey\\Docket\\Exceptions\\LoopDetected",
+      "reason": "Thrown by Docket, not adopted."
+    },
+    {
+      "ref": "Tey\\Docket\\Exceptions\\ResultNotAvailable",
+      "reason": "Thrown by Docket, not adopted."
+    },
+    {
+      "ref": "Tey\\Docket\\Exceptions\\RunFailed",
+      "reason": "Thrown by Docket, not adopted."
+    },
+    {
+      "ref": "Tey\\Docket\\Testing\\DocketFake",
+      "reason": "A test double, used only in app tests."
+    },
+    {
+      "ref": "Tey\\Docket\\Testing\\FakeRun",
+      "reason": "A test double, used only in app tests."
+    }
+  ]
+}
