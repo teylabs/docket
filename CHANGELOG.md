@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+### Added
+
+- Publish `resources/adoption/surfaces.json` (adoption surfaces format 1) so standards:adoption can read whether an app tracks queued work through Docket, hand-rolls job tracking, or has no queued jobs. A test keeps every `@api` class listed. (#46)
+
 ## [0.2.0] - 2026-10-28
 
 ### Fixed
