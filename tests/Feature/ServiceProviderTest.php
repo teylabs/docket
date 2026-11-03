@@ -81,7 +81,7 @@ it('registers only the six JSON routes and the two signed output routes with web
         $cacheable->add($route);
     }
     expect($cacheable->compile()['attributes'])->toHaveKeys(['docket.show', 'docket.items', 'docket.logs', 'docket.children', 'docket.cancel', 'docket.retry', 'docket.output', 'docket.output.view']);
-    expect($routes->filter(fn ($route) => str_starts_with($route->getName(), 'docket.output'))->every(fn ($route) => in_array('signed', $route->gatherMiddleware(), true)))->toBeTrue();
+    expect($routes->filter(fn ($route) => str_starts_with($route->getName(), 'docket.output'))->every(fn ($route) => in_array('signed:relative', $route->gatherMiddleware(), true)))->toBeTrue();
     getJson('/docket/runs/unknown/watch')->assertNotFound();
 });
 
