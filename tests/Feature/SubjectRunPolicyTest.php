@@ -77,8 +77,7 @@ it('keeps initiator-only access until the subject policy is registered', functio
 it('lets tenant managers read and cancel initiator-less work and retry it with the same subject', function (bool $separateDatabase) {
     if ($separateDatabase) {
         config(['database.connections.records' => ['driver' => 'sqlite', 'database' => ':memory:'], 'docket.connection' => 'records']);
-        $migration = require __DIR__.'/../../database/migrations/2026_10_13_000000_create_docket_tables.php';
-        $migration->up();
+        migrateDocket();
     }
     Gate::policy(Run::class, SubjectRunPolicy::class);
     $workspace = Workspace::findOrFail(1);

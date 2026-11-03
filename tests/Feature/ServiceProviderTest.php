@@ -19,6 +19,7 @@ it('boots the provider and merges the schema and snapshot config', function () {
             'ttl' => 86400,
             'stale_after' => 3600,
             'poll_after_ms' => 2000,
+            'output_link_ttl' => 600,
             'max_depth' => 10,
             'routes' => ['enabled' => true, 'prefix' => 'docket', 'middleware' => ['web']],
         ]);
@@ -51,6 +52,15 @@ it('preserves unspecified route defaults and replaces middleware lists', functio
     'empty prefix' => [['prefix' => ''], ['enabled' => true, 'prefix' => '', 'middleware' => ['web']]],
 ]);
 
+it('publishes the Vue components under docket-vue to the README\'s @/docket folder', function () {
+    $vue = DocketServiceProvider::pathsToPublish(DocketServiceProvider::class, 'docket-vue');
+
+    expect(array_values($vue))->toBe([resource_path('js/docket')]);
+    foreach (['index.ts', 'run.ts', 'useDocketRun.ts', 'DocketProgress.vue', 'DocketRunModal.vue'] as $file) {
+        expect(array_key_first($vue).'/'.$file)->toBeFile();
+    }
+});
+
 it('publishes the migration and configuration under their documented tags', function () {
     $migrations = DocketServiceProvider::pathsToPublish(DocketServiceProvider::class, 'docket-migrations');
     $configuration = DocketServiceProvider::pathsToPublish(DocketServiceProvider::class, 'docket-config');
@@ -61,16 +71,17 @@ it('publishes the migration and configuration under their documented tags', func
         ->and(array_values($configuration))->toBe([config_path('docket.php')]);
 });
 
-it('registers only the six JSON routes with web middleware and cacheable controller actions', function () {
+it('registers only the six JSON routes and the two signed output routes with web middleware and cacheable controller actions', function () {
     $routes = collect(Route::getRoutes()->getRoutes())->filter(fn ($route) => str_starts_with($route->getName() ?? '', 'docket.'));
-    expect($routes)->toHaveCount(6);
+    expect($routes)->toHaveCount(8);
     $cacheable = new RouteCollection;
     foreach ($routes as $route) {
         expect($route->gatherMiddleware())->toContain('web');
         $route->prepareForSerialization();
         $cacheable->add($route);
     }
-    expect($cacheable->compile()['attributes'])->toHaveKeys(['docket.show', 'docket.items', 'docket.logs', 'docket.children', 'docket.cancel', 'docket.retry']);
+    expect($cacheable->compile()['attributes'])->toHaveKeys(['docket.show', 'docket.items', 'docket.logs', 'docket.children', 'docket.cancel', 'docket.retry', 'docket.output', 'docket.output.view']);
+    expect($routes->filter(fn ($route) => str_starts_with($route->getName(), 'docket.output'))->every(fn ($route) => in_array('signed:relative', $route->gatherMiddleware(), true)))->toBeTrue();
     getJson('/docket/runs/unknown/watch')->assertNotFound();
 });
 

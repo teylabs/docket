@@ -14,4 +14,6 @@ Route::prefix(config()->string('docket.routes.prefix'))
         Route::get('runs/{token}/children', [RunController::class, 'children'])->name('children');
         Route::post('runs/{token}/cancel', [RunController::class, 'cancel'])->name('cancel');
         Route::post('runs/{token}/retry', [RunController::class, 'retry'])->name('retry');
+        Route::get('runs/{token}/output', [RunController::class, 'output'])->middleware('signed:relative')->name('output');
+        Route::get('runs/{token}/output/view', [RunController::class, 'view'])->middleware('signed:relative')->name('output.view');
     });

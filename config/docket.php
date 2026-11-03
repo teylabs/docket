@@ -5,6 +5,7 @@ return [
     'ttl' => 86400,
     'stale_after' => 3600,
     'poll_after_ms' => 2000,
+    'output_link_ttl' => 600,
     'max_depth' => 10,
     'routes' => [
         'enabled' => true,

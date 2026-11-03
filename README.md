@@ -5,7 +5,7 @@
 
 > [!NOTE]
 > Docket 0.1 is released. This README describes the accepted design for 0.1–0.3; [docs/reference.md](docs/reference.md) tags every entry with the milestone it lands in.
-> 0.1 ships the runs, items and logs schema, queued and inline runs, JSON tickets, reporting from the work, run trees, loop protection, cancel/retry, pruning, testing fakes, the package JSON routes and the default policy. Rendered progress surfaces and the watch page (0.2) and external workers (0.3) are not implemented yet.
+> 0.1 ships the runs, items and logs schema, queued and inline runs, JSON tickets, reporting from the work, run trees, loop protection, cancel/retry, pruning, testing fakes, the package JSON routes and the default policy. Unreleased: run outputs and the Vue components (`useDocketRun`, `<DocketProgress>`, `<DocketRunModal>`). The React, Blade and Livewire surfaces, `<DocketTree>`, the watch page and external workers are not implemented yet.
 > Opt-in tenant-scoped authorization is implemented for 0.2 but not released.
 
 Docket wraps any piece of work in your Laravel app, from one statement to a queued import of a million rows, in a run: a durable record that it happened, with a ticket you can hand to a page, a console or an API client. Code running inside the work, down to a model observer, can report to the run as it goes. Long work usually means a spinner, a status column, a progress table and a polling endpoint written for each feature. With Docket, each one reads the same status, even after a reload, and can retry only the rows that failed.
@@ -1010,24 +1010,48 @@ Every surface reads the same snapshot.
 
 ### Vue and Inertia
 
+Publish the components into your app, then import them from `@/docket`:
+
+```bash
+php artisan vendor:publish --tag=docket-vue
+# -> resources/js/docket: useDocketRun, DocketProgress, DocketRunModal
+```
+
 ```vue
 <!-- resources/js/pages/Uploads/Show.vue -->
-<script setup>
-import { DocketProgress, useDocketPoll } from '@/docket'
+<script setup lang="ts">
+import { DocketProgress, useDocketRun, type DocketRun } from '@/docket'
 
-const props = defineProps({ upload: Object, run: Object })
-const run = useDocketPoll('run', { reloadOnFinish: ['upload'] })
+const props = defineProps<{ run: DocketRun | null }>()
+const { run, unavailable, retry } = useDocketRun(() => props.run)
 </script>
 
 <template>
-  <DocketProgress :run="run" />
-  <a v-if="run?.status === 'succeeded'" :href="route('uploads.download', upload)">Download</a>
+  <DocketProgress :run="run" :unavailable="unavailable" :steps="{ resize: 'Resizing images' }" @retry="retry" />
 </template>
 ```
 
-`useDocketPoll('run')` reads the page prop `run`, which can be a ticket or a snapshot. It returns the live snapshot and polls the run's `poll` link at `poll_after_ms`, then stops once the run finishes. When the prop changes, after a retry redirect for example, it follows the new run.
+`useDocketRun()` takes a ticket or snapshot, a ref of one, or a getter such as a page prop. It polls the run's `poll` link at `poll_after_ms`, waits out a 429's `Retry-After`, ignores responses older than the snapshot it holds, and stops when the run finishes or the component unmounts. `retry()` posts to the run's `retry` link and follows the new run.
 
-`<DocketProgress>` shows the step, the progress, failed and skipped counts, an indeterminate bar while the total is unknown, and a final state. It announces step changes to screen readers and respects reduced motion.
+`<DocketProgress>` shows the step (through your `steps` labels), a native `<progress>` bar that is determinate when the run knows its total and indeterminate otherwise, failed and skipped counts, and a final state with Retry. Its status line is a polite live region. The markup is unstyled: style it through the `data-docket-*` attributes, or replace the final state with the `final` slot.
+
+### Runs That Produce a File
+
+Record the file in the work, then show the run in a dialog:
+
+```php
+// app/Jobs/BuildReport.php
+$path = $report->renderTo('reports/'.$report->id.'.pdf');
+$run->output($path, disk: 'local', name: 'Report.pdf', mime: 'application/pdf');
+```
+
+```vue
+<DocketRunModal v-model:open="building" :run="ticket" title="Building the report" :steps="{ render: 'Rendering' }" />
+```
+
+Docket keeps a reference to the file, never a copy; your application owns its lifetime. The snapshot shows the output's name, type and size, and `links.download` and `links.view` are signed for `docket.output_link_ttl` seconds and also checked by the run's `view` policy. Download is always an attachment; View opens inline only for PDFs, images and plain text, and downloads anything else. An inline image or text file is also served with `Content-Security-Policy: sandbox` (browsers refuse to show a sandboxed PDF, so PDFs go without it). The links are signed as relative paths, so a proxy or a second host name doesn't invalidate them.
+
+When the run succeeds, `<DocketRunModal>` shows Download and View and starts the download at once (once per run on the page, even if the dialog opens again) by submitting a hidden GET form to `links.download`, aimed at a hidden frame. The browser saves the file while the page and dialog stay put, no popup blocker is involved, and an error answer lands in the frame instead of over the page. A later click on Download reads the run again first, so the link is freshly signed; if the file is gone, the dialog says so. Pass `:auto-download="false"` to wait for a click, `:download="url => yourForm.submit(url, { target: ensureDownloadFrame() })"` to reuse your own form component (always aim it at `ensureDownloadFrame()`: a form aimed at a missing frame opens a window, which the popup blocker stops), or the `complete` slot to replace the buttons.
 
 ### React
 
