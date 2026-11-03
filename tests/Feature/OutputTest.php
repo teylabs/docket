@@ -55,7 +55,7 @@ it('never opens a type the browser could run in the page, only downloads it', fu
     expect($run->toArray()['links'])->toHaveKey('download')
         ->and(array_key_exists('view', $run->toArray()['links']))->toBeFalse();
 
-    $view = URL::temporarySignedRoute('docket.output.view', now()->addMinute(), ['token' => $run->token]);
+    $view = URL::temporarySignedRoute('docket.output.view', now()->addMinute(), ['token' => $run->token], absolute: false);
     expect(get($view)->assertOk()->headers->get('Content-Disposition'))->toStartWith('attachment;');
 });
 
@@ -83,7 +83,7 @@ it('needs a valid, unexpired signature, the view policy and a live run', functio
 it('answers not found when the run has no output or the file is gone', function () {
     $run = outputRun();
     expect($run->toArray()['output'])->toBeNull()->and($run->toArray()['links'])->not->toHaveKey('download');
-    get(URL::temporarySignedRoute('docket.output', now()->addMinute(), ['token' => $run->token]))->assertNotFound();
+    get(URL::temporarySignedRoute('docket.output', now()->addMinute(), ['token' => $run->token], absolute: false))->assertNotFound();
 
     Storage::disk('private')->put('builds/a1.pdf', 'x');
     $run->output('builds/a1.pdf', 'private');
@@ -95,4 +95,23 @@ it('follows a run whose policy only allows viewing', function () {
     Gate::policy(Run::class, ReadOnlyRunPolicy::class);
     Storage::disk('private')->put('builds/a1.pdf', 'x');
     get(outputRun()->output('builds/a1.pdf', 'private')->toArray()['links']['download'])->assertOk();
+});
+
+it('signs relative links, so a proxy or a different host name does not break them', function () {
+    Storage::disk('private')->put('builds/a1.pdf', 'x');
+    $links = outputRun()->output('builds/a1.pdf', 'private')->toArray()['links'];
+    expect($links['download'])->toStartWith('/docket/runs/');
+
+    get('https://other-host.test'.$links['download'])->assertOk();
+});
+
+it('sandboxes an inline image but not an inline PDF, which browsers refuse to show sandboxed', function () {
+    Storage::disk('private')->put('builds/photo.png', 'png');
+    Storage::disk('private')->put('builds/a1.pdf', 'pdf');
+    $image = outputRun()->output('builds/photo.png', 'private', mime: 'image/png')->toArray()['links'];
+    $pdf = outputRun()->output('builds/a1.pdf', 'private', mime: 'application/pdf')->toArray()['links'];
+
+    get($image['view'])->assertHeader('Content-Security-Policy', 'sandbox');
+    get($pdf['view'])->assertHeaderMissing('Content-Security-Policy');
+    get($image['download'])->assertHeaderMissing('Content-Security-Policy');
 });

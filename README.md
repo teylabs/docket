@@ -1049,9 +1049,9 @@ $run->output($path, disk: 'local', name: 'Report.pdf', mime: 'application/pdf');
 <DocketRunModal v-model:open="building" :run="ticket" title="Building the report" :steps="{ render: 'Rendering' }" />
 ```
 
-Docket keeps a reference to the file, never a copy; your application owns its lifetime. The snapshot shows the output's name, type and size, and `links.download` and `links.view` are signed for `docket.output_link_ttl` seconds and also checked by the run's `view` policy. Download is always an attachment; View opens inline only for PDFs, images and plain text, and downloads anything else.
+Docket keeps a reference to the file, never a copy; your application owns its lifetime. The snapshot shows the output's name, type and size, and `links.download` and `links.view` are signed for `docket.output_link_ttl` seconds and also checked by the run's `view` policy. Download is always an attachment; View opens inline only for PDFs, images and plain text, and downloads anything else. An inline image or text file is also served with `Content-Security-Policy: sandbox` (browsers refuse to show a sandboxed PDF, so PDFs go without it). The links are signed as relative paths, so a proxy or a second host name doesn't invalidate them.
 
-When the run succeeds, `<DocketRunModal>` shows Download and View and starts the download at once by submitting a hidden GET form to `links.download`, so the browser saves the file while the page and dialog stay put, and no popup blocker is involved. Pass `:auto-download="false"` to wait for a click, `:download="url => yourForm.submit(url)"` to reuse your own form component, or the `complete` slot to replace the buttons.
+When the run succeeds, `<DocketRunModal>` shows Download and View and starts the download at once (once per run on the page, even if the dialog opens again) by submitting a hidden GET form to `links.download`, aimed at a hidden frame. The browser saves the file while the page and dialog stay put, no popup blocker is involved, and an error answer lands in the frame instead of over the page. A later click on Download reads the run again first, so the link is freshly signed; if the file is gone, the dialog says so. Pass `:auto-download="false"` to wait for a click, `:download="url => yourForm.submit(url)"` to reuse your own form component, or the `complete` slot to replace the buttons.
 
 ### React
 

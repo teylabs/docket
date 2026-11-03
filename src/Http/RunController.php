@@ -101,11 +101,14 @@ class RunController
         $output = $run->output;
         abort_if($output === null || ! Storage::disk($output['disk'])->exists($output['path']), 404);
 
-        return Storage::disk($output['disk'])->response($output['path'], $output['name'], [
-            'Content-Type' => $output['mime'],
-            'Cache-Control' => 'private, no-store',
-            'X-Content-Type-Options' => 'nosniff',
-        ], $disposition);
+        $headers = ['Content-Type' => $output['mime'], 'Cache-Control' => 'private, no-store', 'X-Content-Type-Options' => 'nosniff'];
+
+        // An inline image or text file gets no script at all. A PDF can't: browsers refuse to show a sandboxed PDF.
+        if ($disposition === 'inline' && $output['mime'] !== 'application/pdf') {
+            $headers['Content-Security-Policy'] = 'sandbox';
+        }
+
+        return Storage::disk($output['disk'])->response($output['path'], $output['name'], $headers, $disposition);
     }
 
     private function resolve(string $token): Run

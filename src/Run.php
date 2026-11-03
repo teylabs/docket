@@ -384,10 +384,10 @@ class Run extends Model
 
             if ($this->output !== null) {
                 $expires = now()->addSeconds(config()->integer('docket.output_link_ttl'));
-                $links['download'] = URL::temporarySignedRoute('docket.output', $expires, ['token' => $this->token]);
+                $links['download'] = URL::temporarySignedRoute('docket.output', $expires, ['token' => $this->token], absolute: false);
 
                 if ($this->outputViewable()) {
-                    $links['view'] = URL::temporarySignedRoute('docket.output.view', $expires, ['token' => $this->token]);
+                    $links['view'] = URL::temporarySignedRoute('docket.output.view', $expires, ['token' => $this->token], absolute: false);
                 }
             }
         }

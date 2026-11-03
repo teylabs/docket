@@ -55,12 +55,26 @@ export function formFields(url: string): { action: string; fields: Array<[string
     return { action, fields: [...parsed.searchParams.entries()] };
 }
 
-/** Starts a download of an attachment URL through a short-lived hidden GET form; the page and any dialog stay put. */
+/** The name of the hidden frame downloads go through: an error answer (an expired link) lands there, not over the page. */
+export const DOWNLOAD_FRAME = 'docket-download';
+
+/**
+ * Starts a download of an attachment URL through a short-lived hidden GET form aimed at a hidden frame. The page and any
+ * dialog stay put, and if the server answers with an error page instead of the file, the error stays out of sight.
+ */
 export function submitDownload(url: string, doc: Document = document): void {
     const { action, fields } = formFields(url);
+    if (!doc.querySelector(`iframe[name="${DOWNLOAD_FRAME}"]`)) {
+        const frame = doc.createElement('iframe');
+        frame.name = DOWNLOAD_FRAME;
+        frame.hidden = true;
+        frame.title = 'Downloads';
+        doc.body.append(frame);
+    }
     const form = doc.createElement('form');
     form.method = 'GET';
     form.action = action;
+    form.target = DOWNLOAD_FRAME;
     form.hidden = true;
     for (const [name, value] of fields) {
         const input = doc.createElement('input');
@@ -72,4 +86,32 @@ export function submitDownload(url: string, doc: Document = document): void {
     doc.body.append(form);
     form.submit();
     form.remove();
+}
+
+/**
+ * The download link to use now. Signed links expire, and a finished run is no longer polled, so read the run once more for a
+ * freshly signed link; if that read fails (rate limited, offline), fall back to the link already held.
+ */
+export async function freshDownloadLink(run: DocketRun, read: (url: string) => Promise<Response> = url => fetch(url, { headers: { Accept: 'application/json' }, credentials: 'same-origin' })): Promise<string | null> {
+    if (run.links.poll) {
+        try {
+            const response = await read(run.links.poll);
+            if (response.ok) return ((await response.json()) as DocketRun).links.download ?? null;
+            if (response.status === 404 || response.status === 403) return null;
+        } catch {
+            // Offline or blocked: the held link may still be valid.
+        }
+    }
+
+    return run.links.download ?? null;
+}
+
+const downloadedRuns = new Set<string>();
+
+/** Whether the automatic download for this run has already started on this page, across remounts of the dialog. Marks it. */
+export function claimAutoDownload(runId: string): boolean {
+    if (downloadedRuns.has(runId)) return false;
+    downloadedRuns.add(runId);
+
+    return true;
 }
