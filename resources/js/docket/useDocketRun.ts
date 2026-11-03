@@ -1,5 +1,5 @@
 import { onBeforeUnmount, ref, shallowRef, toValue, watch, type MaybeRefOrGetter } from 'vue';
-import { finished, newer, nextDelay, type DocketRun } from './run';
+import { finished, isTicket, newer, nextDelay, type DocketRun } from './run';
 
 export type DocketRunState = {
     /** The live snapshot (or the ticket until the first poll answers). */
@@ -50,7 +50,8 @@ export function useDocketRun(source: MaybeRefOrGetter<DocketRun | null | undefin
 
     async function poll(current: number): Promise<void> {
         const snapshot = run.value;
-        if (current !== generation || !snapshot || finished(snapshot) || !snapshot.links.poll) return;
+        // A finished snapshot needs nothing more; a finished ticket still lacks its output and links, so it is read once.
+        if (current !== generation || !snapshot || (finished(snapshot) && !isTicket(snapshot)) || !snapshot.links.poll) return;
         try {
             const response = await request(snapshot.links.poll, 'GET');
             if (current !== generation) return;
@@ -62,7 +63,7 @@ export function useDocketRun(source: MaybeRefOrGetter<DocketRun | null | undefin
             failures = 0;
             const incoming = (await response.json()) as DocketRun;
             if (current !== generation) return;
-            if (newer(run.value, incoming)) run.value = incoming;
+            if (newer(run.value, incoming) || (run.value !== null && isTicket(run.value) && incoming.id === run.value.id)) run.value = incoming;
             if (!finished(run.value)) schedule(nextDelay(run.value!), current);
         } catch {
             if (current !== generation) return;
@@ -77,7 +78,7 @@ export function useDocketRun(source: MaybeRefOrGetter<DocketRun | null | undefin
         failures = 0;
         unavailable.value = false;
         run.value = next;
-        if (next && !finished(next)) void poll(generation);
+        if (next && (!finished(next) || isTicket(next))) void poll(generation);
     };
 
     async function retry(): Promise<void> {

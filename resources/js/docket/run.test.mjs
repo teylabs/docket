@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ensureDownloadFrame, claimAutoDownload, finished, formFields, freshDownloadLink, newer, nextDelay, percent, submitDownload } from './run.ts';
+import { ensureDownloadFrame, isTicket, claimAutoDownload, finished, formFields, freshDownloadLink, newer, nextDelay, percent, submitDownload } from './run.ts';
 
 const run = (overrides = {}) => ({ schema_version: 1, id: 'r1', token: 't', name: 'build', status: 'running', revision: 1, poll_after_ms: 2000, links: {}, ...overrides });
 
@@ -78,4 +78,9 @@ test('ensureDownloadFrame creates the frame once and always returns its name', (
     assert.equal(ensureDownloadFrame(doc), 'docket-download');
     assert.equal(frames.length, 1);
     assert.equal(frames[0].hidden, true);
+});
+
+test('a ticket is told apart from a snapshot, so a run that finished before its ticket arrived is still read once', () => {
+    assert.equal(isTicket({ schema_version: 1, id: 'r', token: 't', name: 'n', status: 'succeeded', revision: 3, poll_after_ms: null, links: { poll: '/p' } }), true);
+    assert.equal(isTicket(run({ status: 'succeeded', progress: { done: 1, total: 1, percent: 100 } })), false);
 });

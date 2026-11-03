@@ -23,6 +23,9 @@ export type DocketRun = {
 export const finished = (run: Pick<DocketRun, 'status'> | null | undefined): boolean =>
     run != null && ['succeeded', 'partial', 'failed', 'cancelled'].includes(run.status);
 
+/** A ticket (what a controller returns) carries only the run's identity and status; a snapshot (the poll link's answer) has its progress. */
+export const isTicket = (run: DocketRun): boolean => !('progress' in run);
+
 export const succeeded = (run: Pick<DocketRun, 'status'> | null | undefined): boolean => run?.status === 'succeeded';
 
 /** A determinate percentage only when the run knows its total; null asks for an indeterminate bar. */

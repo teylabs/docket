@@ -5,7 +5,7 @@
 ### Added
 
 - A run can record the file it produced with `$run->output($path, $disk, $name, $mime)`. The snapshot gains `output` (name, type and size, never the location) and signed, short-lived `links.download` (attachment) and `links.view` (inline, for PDFs, images and plain text only), streamed from the disk and checked by the run's `view` policy. `docket.output_link_ttl` sets their lifetime. (#48)
-- Vue components ship with the package: `php artisan vendor:publish --tag=docket-vue` copies `useDocketRun`, `<DocketProgress>` and `<DocketRunModal>` to `resources/js/docket`. The modal shows progress, then Download and View, and starts the download through a hidden GET form aimed at a hidden frame, so the page stays put even when a link has expired. (#48)
+- Vue components ship with the package: `php artisan vendor:publish --tag=docket-vue` copies `useDocketRun`, `<DocketProgress>` and `<DocketRunModal>` to `resources/js/docket`. The modal shows progress, then Download and View, and starts the download through a hidden GET form aimed at a hidden frame, so the page stays put even when a link has expired. `useDocketRun` reads a run once when handed a ticket that already finished (a sync queue, or work that was reused), so its output and links arrive. (#48)
 - Publish `resources/adoption/surfaces.json` (adoption surfaces format 1) so standards:adoption can read whether an app tracks queued work through Docket, hand-rolls job tracking, or has no queued jobs. A test keeps every `@api` class listed. (#46)
 
 ## [0.2.0] - 2026-10-28
