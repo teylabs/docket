@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { claimAutoDownload, finished, formFields, freshDownloadLink, newer, nextDelay, percent, submitDownload } from './run.ts';
+import { ensureDownloadFrame, claimAutoDownload, finished, formFields, freshDownloadLink, newer, nextDelay, percent, submitDownload } from './run.ts';
 
 const run = (overrides = {}) => ({ schema_version: 1, id: 'r1', token: 't', name: 'build', status: 'running', revision: 1, poll_after_ms: 2000, links: {}, ...overrides });
 
@@ -65,4 +65,17 @@ test('the automatic download starts once per run on a page, even if the dialog i
     assert.equal(claimAutoDownload('run-a'), true);
     assert.equal(claimAutoDownload('run-a'), false);
     assert.equal(claimAutoDownload('run-b'), true);
+});
+
+test('ensureDownloadFrame creates the frame once and always returns its name', () => {
+    const frames = [];
+    const doc = {
+        createElement: () => ({}),
+        body: { append: node => frames.push(node) },
+        querySelector: selector => (selector === 'iframe[name="docket-download"]' ? frames.find(frame => frame.name === 'docket-download') ?? null : null),
+    };
+    assert.equal(ensureDownloadFrame(doc), 'docket-download');
+    assert.equal(ensureDownloadFrame(doc), 'docket-download');
+    assert.equal(frames.length, 1);
+    assert.equal(frames[0].hidden, true);
 });

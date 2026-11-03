@@ -59,11 +59,10 @@ export function formFields(url: string): { action: string; fields: Array<[string
 export const DOWNLOAD_FRAME = 'docket-download';
 
 /**
- * Starts a download of an attachment URL through a short-lived hidden GET form aimed at a hidden frame. The page and any
- * dialog stay put, and if the server answers with an error page instead of the file, the error stays out of sight.
+ * Makes sure the hidden download frame exists and returns its name. Call it before aiming any form at the frame: a form whose
+ * target names a missing frame opens a new window, which the popup blocker stops when no click is behind it.
  */
-export function submitDownload(url: string, doc: Document = document): void {
-    const { action, fields } = formFields(url);
+export function ensureDownloadFrame(doc: Document = document): string {
     if (!doc.querySelector(`iframe[name="${DOWNLOAD_FRAME}"]`)) {
         const frame = doc.createElement('iframe');
         frame.name = DOWNLOAD_FRAME;
@@ -71,6 +70,17 @@ export function submitDownload(url: string, doc: Document = document): void {
         frame.title = 'Downloads';
         doc.body.append(frame);
     }
+
+    return DOWNLOAD_FRAME;
+}
+
+/**
+ * Starts a download of an attachment URL through a short-lived hidden GET form aimed at a hidden frame. The page and any
+ * dialog stay put, and if the server answers with an error page instead of the file, the error stays out of sight.
+ */
+export function submitDownload(url: string, doc: Document = document): void {
+    const { action, fields } = formFields(url);
+    ensureDownloadFrame(doc);
     const form = doc.createElement('form');
     form.method = 'GET';
     form.action = action;
