@@ -13,6 +13,8 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Facades\URL;
 use InvalidArgumentException;
 use Tey\Docket\Database\Model;
 use Tey\Docket\Reporting\ReportsWork;
@@ -34,6 +36,7 @@ use Tey\Docket\Reporting\ReportsWork;
  * @property int $skipped_count
  * @property array{code: string, params: array<string, scalar|null>}|null $error
  * @property string|null $result
+ * @property array{disk: string, path: string, name: string, mime: string, size: int}|null $output
  * @property mixed $checkpoint
  * @property bool $cancel_requested
  * @property string|null $subject_type
@@ -120,6 +123,7 @@ class Run extends Model
             'stale_after' => 'integer',
             'step' => 'string',
             'result' => 'string',
+            'output' => 'array',
             'total_explicit' => 'boolean',
             'dispatch_sync' => 'boolean',
             'detached' => 'boolean',
@@ -236,6 +240,40 @@ class Run extends Model
         return $this->hasMany(Log::class);
     }
 
+    /**
+     * Records the file this run produced, so the snapshot can offer it. Docket keeps a reference, never a copy: the file stays on the
+     * application's disk, the application owns its lifetime, and Docket streams it through signed links checked by the run's view policy.
+     *
+     * @api
+     */
+    public function output(string $path, ?string $disk = null, ?string $name = null, ?string $mime = null): static
+    {
+        $disk ??= config()->string('filesystems.default');
+        $storage = Storage::disk($disk);
+
+        if (! $storage->exists($path)) {
+            throw new InvalidArgumentException("The run's output [$path] does not exist on the [$disk] disk.");
+        }
+
+        $name = trim(str_replace(['/', '\\', '"'], '-', (string) preg_replace('/[\x00-\x1F\x7F]/u', '', $name ?? basename($path))));
+
+        $this->forceFill(['output' => [
+            'disk' => $disk,
+            'path' => $path,
+            'name' => $name === '' ? basename($path) : $name,
+            'mime' => $mime ?? ($storage->mimeType($path) ?: 'application/octet-stream'),
+            'size' => $storage->size($path),
+        ]])->save();
+
+        return $this;
+    }
+
+    /** Whether the output may open in the browser: types a browser renders without running the file's own script. @internal */
+    public function outputViewable(): bool
+    {
+        return $this->output !== null && in_array($this->output['mime'], ['application/pdf', 'image/png', 'image/jpeg', 'image/gif', 'image/webp', 'text/plain'], true);
+    }
+
     /** @return Collection<string, string|null> */
     public function results(): Collection
     {
@@ -343,6 +381,15 @@ class Run extends Model
             if (in_array($this->status, [RunStatus::Partial, RunStatus::Failed, RunStatus::Cancelled], true) && Gate::allows('retry', $this)) {
                 $links['retry'] = $poll.'/retry';
             }
+
+            if ($this->output !== null) {
+                $expires = now()->addSeconds(config()->integer('docket.output_link_ttl'));
+                $links['download'] = URL::temporarySignedRoute('docket.output', $expires, ['token' => $this->token]);
+
+                if ($this->outputViewable()) {
+                    $links['view'] = URL::temporarySignedRoute('docket.output.view', $expires, ['token' => $this->token]);
+                }
+            }
         }
 
         return [
@@ -362,6 +409,7 @@ class Run extends Model
             ],
             'error' => $this->error === null || ! $this->failed() ? null : ['code' => $this->error['code'], 'params' => (object) $this->error['params']],
             'result' => $this->result,
+            'output' => $this->output === null ? null : ['name' => $this->output['name'], 'mime' => $this->output['mime'], 'size' => $this->output['size']],
             'partial' => $this->items()->whereNotNull('result')->orderByDesc('finished_at')->orderByDesc('id')->limit(20)
                 ->get(['key', 'result'])->map(fn (Item $item) => ['key' => $item->key, 'result' => $item->result])->all(),
             'cancel_requested' => $this->cancel_requested,

@@ -1,0 +1,28 @@
+name: Vue components
+
+on:
+  push:
+    branches: [main, '*.x']
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+jobs:
+  node:
+    name: node --test
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '24'
+
+      - name: Test the snapshot helpers
+        run: node --test --experimental-strip-types resources/js/docket/*.test.mjs

@@ -21,7 +21,7 @@ it('serializes the exact v1 snapshot and never columns or loaded relations', fun
         'schema_version' => 1, 'id' => $run->id, 'token' => $run->token, 'name' => 'rows.import', 'status' => 'running',
         'revision' => 1, 'step' => 'validate', 'progress' => ['done' => 340, 'total' => 1200, 'percent' => 28],
         'counts' => ['processed' => 10, 'succeeded' => 6, 'failed' => 3, 'skipped' => 1],
-        'error' => null, 'result' => null, 'partial' => [], 'cancel_requested' => false,
+        'error' => null, 'result' => null, 'output' => null, 'partial' => [], 'cancel_requested' => false,
         'parent_run_id' => null, 'root_run_id' => null, 'retry_of_run_id' => null, 'linked_from_run_id' => null,
         'children' => ['total' => 0, 'running' => 0, 'succeeded' => 0, 'partial' => 0, 'failed' => 0],
         'created_at' => now()->utc()->format('Y-m-d\TH:i:s\Z'), 'finished_at' => null, 'expires_at' => null,

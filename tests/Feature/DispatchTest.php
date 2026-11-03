@@ -407,8 +407,7 @@ it('defers sync work until commit and isolates already committed savepoints from
 
 it('runs synchronous batches on a separate docket database', function () {
     config(['database.connections.records' => ['driver' => 'sqlite', 'database' => ':memory:'], 'docket.connection' => 'records']);
-    $migration = require __DIR__.'/../../database/migrations/2026_10_13_000000_create_docket_tables.php';
-    $migration->up();
+    migrateDocket();
     $ticket = Docket::batch([new RecordWork('a'), [new RecordWork('b'), new RecordWork('c')]])->dispatchSync();
     expect($ticket->status)->toBe(RunStatus::Succeeded)
         ->and(DB::table('work_results')->pluck('label')->all())->toBe(['a', 'b', 'c'])
@@ -701,8 +700,7 @@ it('dispatches added work synchronously when the run used dispatchSync', functio
 it('keeps synchronous keyed failures local to their item and continues the batch', function () {
     // Native sync batches hold a write transaction; SQLite needs a separate reporting database.
     config(['database.connections.records' => ['driver' => 'sqlite', 'database' => ':memory:'], 'docket.connection' => 'records']);
-    $migration = require __DIR__.'/../../database/migrations/2026_10_13_000000_create_docket_tables.php';
-    $migration->up();
+    migrateDocket();
     Exceptions::fake([RuntimeException::class]);
     $ticket = Docket::batch([[new ReportingWork('bad', 'fail'), new ReportingWork('must.not.run')], new ReportingWork('good')])->dispatchSync();
     expect($ticket->status)->toBe(RunStatus::Partial)->and($ticket->run()->done)->toBe(2)

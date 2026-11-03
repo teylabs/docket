@@ -69,6 +69,10 @@ class DocketServiceProvider extends ServiceProvider
                 __DIR__.'/../config/docket.php' => config_path('docket.php'),
             ], 'docket-config');
 
+            $this->publishes([
+                __DIR__.'/../resources/js/docket' => resource_path('js/docket'),
+            ], 'docket-vue');
+
             $this->publishesMigrations([
                 __DIR__.'/../database/migrations' => database_path('migrations'),
             ], 'docket-migrations');

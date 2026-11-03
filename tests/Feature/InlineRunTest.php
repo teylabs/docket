@@ -211,8 +211,7 @@ it('observes transactions ended by the closure itself without finishing before t
 
 it('survives application writes rolled back on a separate configured docket database', function () {
     config(['database.connections.records' => ['driver' => 'sqlite', 'database' => ':memory:'], 'docket.connection' => 'records']);
-    $migration = require __DIR__.'/../../database/migrations/2026_10_13_000000_create_docket_tables.php';
-    $migration->up();
+    migrateDocket();
     Schema::create('work', fn (Blueprint $table) => $table->string('value'));
     DB::beginTransaction();
     $ticket = Docket::run(fn () => DB::table('work')->insert(['value' => 'private']));

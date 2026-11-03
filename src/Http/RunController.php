@@ -6,8 +6,10 @@ use Illuminate\Http\JsonResponse;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
+use Illuminate\Support\Facades\Storage;
 use Illuminate\Validation\Rule;
 use LogicException;
+use Symfony\Component\HttpFoundation\StreamedResponse;
 use Tey\Docket\ItemStatus;
 use Tey\Docket\Run;
 use Tey\Docket\RunStatus;
@@ -80,6 +82,30 @@ class RunController
         $response->setStatusCode(202);
 
         return $response;
+    }
+
+    public function output(string $token): StreamedResponse
+    {
+        return $this->stream($this->resolve($token), 'attachment');
+    }
+
+    public function view(string $token): StreamedResponse
+    {
+        $run = $this->resolve($token);
+
+        return $this->stream($run, $run->outputViewable() ? 'inline' : 'attachment');
+    }
+
+    private function stream(Run $run, string $disposition): StreamedResponse
+    {
+        $output = $run->output;
+        abort_if($output === null || ! Storage::disk($output['disk'])->exists($output['path']), 404);
+
+        return Storage::disk($output['disk'])->response($output['path'], $output['name'], [
+            'Content-Type' => $output['mime'],
+            'Cache-Control' => 'private, no-store',
+            'X-Content-Type-Options' => 'nosniff',
+        ], $disposition);
     }
 
     private function resolve(string $token): Run

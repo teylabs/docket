@@ -181,8 +181,7 @@ it('uses an independent connection and keeps docket records after application ro
 it('keeps morph targets on the application database when docket uses a different database', function () {
     config(['database.connections.records' => ['driver' => 'sqlite', 'database' => ':memory:', 'foreign_key_constraints' => true]]);
     config(['docket.connection' => 'records']);
-    $migration = require __DIR__.'/../../database/migrations/2026_10_13_000000_create_docket_tables.php';
-    $migration->up();
+    migrateDocket();
 
     Schema::create('uploads', function (Blueprint $table) {
         $table->id();
@@ -216,7 +215,7 @@ it('keeps morph targets on the application database when docket uses a different
         ->and(Upload::with('latestRun')->findOrFail($upload->id)->latestRun->is($newer))->toBeTrue()
         ->and(Run::findOrFail($older->id)->initiator)->toBeNull();
 
-    $migration->down();
+    rollbackDocket();
     expect(Schema::connection('records')->hasTable('docket_runs'))->toBeFalse()
         ->and(Schema::hasTable('uploads'))->toBeTrue();
 });
