@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [0.3.0] - 2026-11-03
+
 ### Added
 
 - A run can record the file it produced with `$run->output($path, $disk, $name, $mime)`. The snapshot gains `output` (name, type and size, never the location) and signed, short-lived `links.download` (attachment) and `links.view` (inline, for PDFs, images and plain text only), streamed from the disk and checked by the run's `view` policy. `docket.output_link_ttl` sets their lifetime. (#48)
