@@ -283,8 +283,12 @@ class Run extends Model
      */
     public function outputLink(string $url, string $label): static
     {
-        if (preg_match('~^(https?://|/)~i', $url) !== 1) {
-            throw new InvalidArgumentException('An output link must be a non-empty http(s) URL or path.');
+        $absolute = preg_match('~^https?://[^/?#@\s]+(?:[/?#]|$)~i', $url) === 1;
+        $path = preg_match('~^/(?![/\\\\])~', $url) === 1;
+
+        // A path must stay on this host: `//host` and `/\host` are other hosts to a browser. No whitespace, control characters or backslashes.
+        if ((! $absolute && ! $path) || preg_match('~[\x00-\x20\x7F\\\\]~', $url) === 1) {
+            throw new InvalidArgumentException('An output link must be an http(s) URL or a path on this host.');
         }
 
         $this->forceFill(['output_link' => ['url' => $url, 'label' => $label]])->save();
@@ -332,20 +336,23 @@ class Run extends Model
     /**
      * The declared steps as checklist items, the shape a server-driven checklist component draws (`key`, `label`, `state`, `detail`,
      * `reason`, `required`, `action`): `state` is the step's status, and `reason` is the failure reason for the error code from
-     * `docket.runs.reasons`, else the code. Empty when the work declared no steps.
+     * `docket.runs.reasons`, else the generic `docket.runs.copy.reason`; `code` keeps the error code for logs and support. Empty when the work declared no steps.
      *
-     * @return list<array{key: string, label: string, state: string, detail: null, reason: string|null, required: true, action: null}>
+     * @return list<array{key: string, label: string, state: string, detail: null, reason: string|null, code: string|null, required: true, action: null}>
      */
     public function checklist(): array
     {
         $reasons = config()->array('docket.runs.reasons', []);
+        $fallback = config('docket.runs.copy.reason');
+        $fallback = is_string($fallback) ? $fallback : 'Something went wrong.';
 
         return array_map(fn (array $step): array => [
             'key' => $step['key'],
             'label' => $step['label'],
             'state' => $step['status'],
             'detail' => null,
-            'reason' => isset($step['error']) ? (is_string($reasons[$step['error']] ?? null) ? $reasons[$step['error']] : $step['error']) : null,
+            'reason' => isset($step['error']) ? (is_string($reasons[$step['error']] ?? null) ? $reasons[$step['error']] : $fallback) : null,
+            'code' => $step['error'] ?? null,
             'required' => true,
             'action' => null,
         ], $this->stepList());

@@ -1,5 +1,7 @@
 <?php
 
+use Illuminate\Database\Eloquent\Builder;
+use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Sleep;
@@ -215,4 +217,81 @@ it('shows a failed child\'s reason on its parent, through any depth', function (
     $root->update(['status' => RunStatus::Partial, 'error' => null]);
     travel(1)->seconds();
     expect(getJson('/docket/runs?name=report.build')->json('runs.0.reason'))->toBe('The message could not be read.');
+});
+
+it('accepts an output link on this host or an absolute http(s) URL', function (string $url) {
+    expect(listedRun()->outputLink($url, 'Open')->output_link)->toBe(['url' => $url, 'label' => 'Open']);
+})->with(['/records/42', '/records/42?tab=files#top', 'https://example.test/records/42', 'http://example.test']);
+
+it('refuses an output link that leaves this host or could run script', function (string $url) {
+    expect(fn () => listedRun()->outputLink($url, 'Open'))->toThrow(InvalidArgumentException::class);
+})->with([
+    'protocol-relative' => '//evil.example/x',
+    'backslash host' => '/\\evil.example',
+    'backslash later' => 'https://example.test\\@evil.example',
+    'script' => 'javascript:alert(1)',
+    'data' => 'data:text/html,x',
+    'userinfo' => 'https://user@evil.example/',
+    'no host' => 'https:///x',
+    'leading space' => ' /x',
+    'newline' => "/a\nb",
+    'space' => 'https://example.test/a b',
+    'relative' => 'records/42',
+    'empty' => '',
+]);
+
+it('falls back to generic copy for an unmapped failure, keeping the code apart', function () {
+    $run = listedRun(['status' => RunStatus::Failed, 'finished_at' => now(), 'error' => ['code' => 'report.unmapped', 'params' => []], 'steps' => ['render' => 'Rendering'], 'step' => 'render']);
+
+    $row = getJson('/docket/runs?name=report.build')->json('runs.0');
+    $item = $run->refresh()->checklist()[0];
+
+    expect($row['reason'])->toBe('Something went wrong.')
+        ->and($row['code'])->toBe('report.unmapped')
+        ->and($item['reason'])->toBe('Something went wrong.')
+        ->and($item['code'])->toBe('report.unmapped');
+});
+
+it('re-enters the host context around each stream tick, for a scope that reads ambient state', function (bool $wrapped) {
+    Sleep::fake(syncWithCarbon: true);
+    config(['docket.stream.seconds' => 0]);
+    $context = new stdClass;
+    $context->tenant = null;
+    $run = listedRun(['subject_type' => 'workspace', 'subject_id' => '7']);
+    listedRun(['subject_type' => 'workspace', 'subject_id' => '8']);
+    // A scope written against ambient state (discouraged, but common): it reads the tenant the middleware set and has since restored.
+    Docket::runs()->scopeUsing(function (Builder $query) use ($context): void {
+        $query->where('subject_id', (string) $context->tenant);
+    });
+    if ($wrapped) {
+        Docket::runs()->streamContextUsing(function (Closure $next, Request $request) use ($context) {
+            $context->tenant = $request->query('tenant');
+            try {
+                return $next();
+            } finally {
+                $context->tenant = null;
+            }
+        });
+    }
+
+    $body = get('/docket/runs/stream?name=report.build&tenant=7')->assertOk()->streamedContent();
+    preg_match('/event: runs\ndata: (.*)\n/', $body, $match);
+
+    expect(array_column(json_decode($match[1], true)['runs'], 'id'))->toBe($wrapped ? [$run->id] : [])
+        ->and($context->tenant)->toBeNull();
+})->with(['without the hook' => false, 'with the hook' => true]);
+
+it('runs each tick of a run stream inside the host context', function () {
+    Sleep::fake(syncWithCarbon: true);
+    $run = listedRun(['status' => RunStatus::Succeeded, 'finished_at' => now()]);
+    $ticks = 0;
+    Docket::runs()->streamContextUsing(function (Closure $next) use (&$ticks) {
+        $ticks++;
+
+        return $next();
+    });
+
+    $body = get('/docket/runs/'.$run->token.'/stream')->assertOk()->streamedContent();
+
+    expect($ticks)->toBeGreaterThan(0)->and($body)->toContain('event: snapshot')->and($body)->toContain('"reason":"finished"');
 });

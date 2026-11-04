@@ -23,6 +23,8 @@ export type DocketRunRow = {
     tone: 'neutral' | 'warning' | 'danger' | 'success';
     message: string;
     reason: string | null;
+    /** The error code behind a failure, for logs and support; not for display. */
+    code: string | null;
     step: { key: string; label: string } | null;
     steps: DocketStep[];
     progress: { done: number; total: number | null; percent: number | null };

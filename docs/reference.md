@@ -380,6 +380,7 @@ The policy requires an authenticated viewer and uses that viewer, including an e
 | Signature | Meaning | Ms |
 | --- | --- | --- |
 | `scopeUsing(Closure(Builder, ?Authenticatable): void $scope): static` | Narrows the candidate query before each row's `view` check. Replaces the initiator pre-filter used with the default policy. | 0.6 |
+| `streamContextUsing(Closure(Closure $next, Request $request): mixed $wrap): static` | Wraps each event-stream tick (runs list and run streams) so the host can re-enter the request's context; return `$next()`. | 0.6.1 |
 | `describeUsing(Closure(array $row, Run $run): array $describe): static` | Adjusts each row after Docket builds it. | 0.6 |
 | `rows(array $filter, ?Authenticatable $viewer = null): array` | The rows for `['name' => …, 'subject_type'?, 'subject_id'?, 'limit'?, 'linger'?]` that the viewer may view. | 0.6 |
 | `payload(array $filter, ?Authenticatable $viewer = null): array` | The endpoint's answer: rows, `active`, `empty`, `poll_after_ms`, `generated_at`. | 0.6 |

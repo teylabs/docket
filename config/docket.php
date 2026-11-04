@@ -37,6 +37,7 @@ return [
             'partial' => 'Finished with some problems',
             'failed' => 'Something went wrong',
             'cancelled' => 'Cancelled',
+            'reason' => 'Something went wrong.',
             'timed_out_reason' => 'This is taking much longer than expected. It may have stopped.',
             'empty' => 'Nothing running.',
             'output' => 'Open',

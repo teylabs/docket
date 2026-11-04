@@ -67,8 +67,8 @@ it('sends the steps as checklist items, with the failure reason as text and the 
     $run = Run::create(['name' => 'r', 'status' => RunStatus::Failed, 'finished_at' => now(), 'steps' => ['prepare' => 'Preparing', 'render' => 'Rendering'], 'step' => 'render', 'error' => ['code' => 'report.render_failed', 'params' => []]]);
 
     expect($run->toArray()['checklist'])->toBe([
-        ['key' => 'prepare', 'label' => 'Preparing', 'state' => 'done', 'detail' => null, 'reason' => null, 'required' => true, 'action' => null],
-        ['key' => 'render', 'label' => 'Rendering', 'state' => 'failed', 'detail' => null, 'reason' => 'The renderer timed out.', 'required' => true, 'action' => null],
+        ['key' => 'prepare', 'label' => 'Preparing', 'state' => 'done', 'detail' => null, 'reason' => null, 'code' => null, 'required' => true, 'action' => null],
+        ['key' => 'render', 'label' => 'Rendering', 'state' => 'failed', 'detail' => null, 'reason' => 'The renderer timed out.', 'code' => 'report.render_failed', 'required' => true, 'action' => null],
     ]);
 
     $run->update(['status' => RunStatus::Succeeded, 'error' => null, 'settling' => true]);

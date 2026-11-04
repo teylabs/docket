@@ -12,6 +12,7 @@ use Illuminate\Validation\Rule;
 use LogicException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
 use Tey\Docket\ItemStatus;
+use Tey\Docket\Listing\RunList;
 use Tey\Docket\Run;
 use Tey\Docket\RunStatus;
 
@@ -35,11 +36,11 @@ class RunController
      * idle proxies from closing the connection, and the stream ends when the run finishes or after `docket.stream.seconds`,
      * with an `end` event so the client knows to reconnect rather than treat the close as an error.
      */
-    public function events(string $token): StreamedResponse
+    public function events(Request $request, string $token, RunList $list): StreamedResponse
     {
         $run = $this->resolve($token);
 
-        return response()->stream(function () use ($run): void {
+        return response()->stream(function () use ($run, $request, $list): void {
             $seconds = max(0, config()->integer('docket.stream.seconds', 60));
             $heartbeat = max(1, config()->integer('docket.stream.heartbeat_seconds', 15));
             $interval = max(250, config()->integer('docket.stream.check_ms', 1000));
@@ -50,8 +51,13 @@ class RunController
             $this->send('retry: '.max(1000, config()->integer('docket.poll_after_ms'))."\n\n");
 
             while (true) {
-                $fresh = Run::query()->whereKey($run->getKey())->first();
-                if ($fresh === null || $fresh->expires_at?->lessThanOrEqualTo(now()) || Gate::denies('view', $fresh)) {
+                [$fresh, $allowed, $json] = $list->inStreamContext($request, function () use ($run): array {
+                    $fresh = Run::query()->whereKey($run->getKey())->first();
+                    $allowed = $fresh !== null && ! $fresh->expires_at?->lessThanOrEqualTo(now()) && Gate::allows('view', $fresh);
+
+                    return [$fresh, $allowed, $allowed ? $fresh->toJson() : null];
+                });
+                if ($fresh === null || ! $allowed) {
                     $this->send("event: end\ndata: {\"reason\":\"unavailable\"}\n\n");
 
                     return;
@@ -61,7 +67,7 @@ class RunController
 
                 if ($fresh->revision !== $revision || $done) {
                     $revision = $fresh->revision;
-                    $this->send('id: '.$fresh->revision."\nevent: snapshot\ndata: ".$fresh->toJson()."\n\n");
+                    $this->send('id: '.$fresh->revision."\nevent: snapshot\ndata: ".$json."\n\n");
                 }
 
                 if ($done) {

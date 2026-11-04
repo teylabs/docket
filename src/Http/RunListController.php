@@ -38,7 +38,7 @@ class RunListController
         $filter = $this->filter($request);
         $user = $request->user();
 
-        return response()->stream(function () use ($list, $filter, $user): void {
+        return response()->stream(function () use ($list, $filter, $user, $request): void {
             $seconds = max(0, config()->integer('docket.stream.seconds', 60));
             $heartbeat = max(1, config()->integer('docket.stream.heartbeat_seconds', 15));
             $interval = max(250, config()->integer('docket.stream.check_ms', 1000));
@@ -49,7 +49,7 @@ class RunListController
             $this->send('retry: '.max(1000, config()->integer('docket.poll_after_ms'))."\n\n");
 
             while (true) {
-                $payload = $list->payload($filter, $user);
+                $payload = $list->inStreamContext($request, fn () => $list->payload($filter, $user));
                 // Signed output links change every second; a fresh signature alone is not a change worth sending.
                 $rows = array_map(function (array $row): array {
                     $links = is_array($row['links'] ?? null) ? $row['links'] : [];
