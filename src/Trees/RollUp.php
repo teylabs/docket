@@ -36,7 +36,16 @@ class RollUp
 
             // Finalize here without a second ancestor walk: one pass even when a tree finishes.
             if (! $after->detached && $after->finished()) {
-                app(Lifecycle::class)->finish($parent->id, RunStatus::Succeeded, propagate: false);
+                if ($after->required && $after->failed()) {
+                    // The parent decided this child is required: its failure is the parent's, with the trail back to it.
+                    $error = $after->error ?? ['code' => 'run.failed', 'params' => []];
+                    app(Lifecycle::class)->finish($parent->id, RunStatus::Failed, [
+                        'code' => $error['code'],
+                        'params' => [...$error['params'], 'child' => $after->id],
+                    ], propagate: false);
+                } else {
+                    app(Lifecycle::class)->finish($parent->id, RunStatus::Succeeded, propagate: false);
+                }
             }
 
             $before = $previous;

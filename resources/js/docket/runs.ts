@@ -11,6 +11,9 @@ export type DocketRunRowState = 'queued' | 'running' | 'slow' | 'timed_out' | 'f
 /** A link the server offers on a row, with its copy. `output` once the run produced a file; `help` on a timed-out or failed run. */
 export type DocketRowLink = { url: string; label: string };
 
+/** A child run that failed, with the reason to show and whether its parent required it. */
+export type DocketFailedChild = { id: string; name: string; label: string; required: boolean; code: string | null; reason: string };
+
 /** One row, exactly as `GET /docket/runs` sends it (`Tey\Docket\Listing\RunList::row()`). */
 export type DocketRunRow = {
     id: string;
@@ -25,6 +28,8 @@ export type DocketRunRow = {
     reason: string | null;
     /** The error code behind a failure, for logs and support; not for display. */
     code: string | null;
+    /** Direct children that failed: optional ones leave the run `partial`; a required one failed it. Since 0.6.2. */
+    failed_children: DocketFailedChild[];
     step: { key: string; label: string } | null;
     steps: DocketStep[];
     progress: { done: number; total: number | null; percent: number | null };

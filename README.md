@@ -317,6 +317,19 @@ Docket::run('catalog.sync', function (Run $run) {
 });
 ```
 
+### Required Children
+
+The parent decides whether a child's failure is fatal. Mark a child `required()` and its failure fails the parent, with the child's own error code and params plus `child` (the trail back to it), level by level:
+
+```php
+Docket::run('intake.email', function () use ($message) {
+    Docket::required()->run('intake.read', fn () => $this->read($message));   // fatal: intake.email fails with its code
+    Docket::job(new AttachFiles($message))->name('intake.attach')->dispatch(); // optional: intake.email ends partial
+});
+```
+
+A child that isn't required (the default) leaves the parent to finish `partial`. Either way the snapshot and the runs list carry `failed_children` (`id`, `name`, `label`, `required`, `code`, `reason`), and the `checklist` adds each failed optional child as a `skipped`, `required: false` item with its reason, so a checklist shows "done with problems" and stays complete. An uncaught exception from an inline child still fails the parent as before (`run.child_failed`), since the parent's own code stopped; mark the child required to roll its code up instead.
+
 ### Depth, Links and Continuation
 
 A `Docket::run()` or `Docket::job()` that would go deeper than `docket.max_depth` throws `Tey\Docket\Exceptions\DepthExceeded` instead of starting. The attempt is recorded as a failed child with the code `run.depth_exceeded`, and it rolls up like any child failure: handled if you catch it, and otherwise the parent fails with `run.child_failed`. The cap fails fast; it never leaves anything waiting.

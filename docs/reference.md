@@ -384,6 +384,7 @@ The policy requires an authenticated viewer and uses that viewer, including an e
 | `describeUsing(Closure(array $row, Run $run): array $describe): static` | Adjusts each row after Docket builds it. | 0.6 |
 | `rows(array $filter, ?Authenticatable $viewer = null): array` | The rows for `['name' => …, 'subject_type'?, 'subject_id'?, 'limit'?, 'linger'?]` that the viewer may view. | 0.6 |
 | `payload(array $filter, ?Authenticatable $viewer = null): array` | The endpoint's answer: rows, `active`, `empty`, `poll_after_ms`, `generated_at`. | 0.6 |
+| `PendingRun::required(bool $required = true): static` (also `Docket::required()`) | The child's failure fails its parent with the child's code, params and `child` trail; otherwise the parent ends `partial`. | 0.6.2 |
 | `row(Run $run, ?int $linger = null): array` | One run as a row, without a policy check. | 0.6 |
 | `Run::outputLink(string $url, string $label): static` | Records where the result lives in the app (an http(s) URL or a path, otherwise `InvalidArgumentException`); the done row's `links.output`. | 0.6 |
 

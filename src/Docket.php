@@ -58,6 +58,11 @@ class Docket
         return $this->job($job)->dispatchSync();
     }
 
+    public function required(bool $required = true): PendingRun
+    {
+        return $this->pending()->required($required);
+    }
+
     public function about(Model $subject): PendingRun
     {
         return $this->pending()->about($subject);

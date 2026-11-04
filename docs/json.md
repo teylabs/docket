@@ -43,6 +43,7 @@ All timestamps are ISO 8601 UTC. Responses send `Cache-Control: private, no-stor
 | `finished_at` | string | yes | Set at the final status. Clients stop polling. |
 | `expires_at` | string | yes | When the run will be deleted; `null` while unfinished under the default TTL. |
 | `checklist` | array | no | The steps as checklist items: `[{ key, label, state, detail, reason, code, required, action }]`; `state` is the step status, `reason` the failure reason text (`docket.runs.reasons`, else `docket.runs.copy.reason`) and `code` the error code (0.6.1). `[]` without declared steps (0.6). |
+| `failed_children` | array | no | Direct, attached children that failed and the viewer may view, oldest first, at most 20: `[{ id, name, label, required, code, reason }]` (0.6.2). |
 | `settling` | bool | no | The run has its final status, but its `then()`/`finally()` callbacks and `RunFinished` listeners are still running (at most `docket.settle_seconds`). The last step stays `active` and `poll_after_ms` stays set; keep reading (0.6). |
 | `poll_after_ms` | int | yes | Suggested delay before the next poll; `null` once finished and settled. |
 | `links.poll` | string | no | This snapshot. |
@@ -85,6 +86,7 @@ Each row:
 | `message` | string | no | The copy for the state, from `docket.runs.copy`. |
 | `code` | string | yes | The error code behind a failed or partial row (followed down to the failing child), for logs and support; never shown (0.6.1). |
 | `reason` | string | yes | A timeout reason, or a failure reason from `docket.runs.reasons` by error code, else `docket.runs.copy.reason`. For `run.child_failed` (or a partial run without a code), the failing child's code is used, followed down the tree. |
+| `failed_children` | array | no | As in the snapshot (0.6.2). |
 | `step` | object | yes | `{ key, label }`: the active or failed declared step, else the run's `step`. |
 | `steps` | array | no | As in the snapshot. |
 | `progress` | object | no | As in the snapshot. |

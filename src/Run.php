@@ -66,6 +66,7 @@ use Tey\Docket\Reporting\ReportsWork;
  * @property array<string, string>|null $steps
  * @property array{url: string, label: string}|null $output_link
  * @property bool $settling
+ * @property bool $required
  * @property-read Progress $progress
  */
 class Run extends Model
@@ -97,6 +98,7 @@ class Run extends Model
         'pending_children' => 0,
         'unsuccessful_children' => 0,
         'settling' => false,
+        'required' => false,
     ];
 
     /** @internal */
@@ -131,6 +133,7 @@ class Run extends Model
             'steps' => 'array',
             'output_link' => 'array',
             'settling' => 'boolean',
+            'required' => 'boolean',
             'total_explicit' => 'boolean',
             'dispatch_sync' => 'boolean',
             'detached' => 'boolean',
@@ -338,24 +341,96 @@ class Run extends Model
      * `reason`, `required`, `action`): `state` is the step's status, and `reason` is the failure reason for the error code from
      * `docket.runs.reasons`, else the generic `docket.runs.copy.reason`; `code` keeps the error code for logs and support. Empty when the work declared no steps.
      *
-     * @return list<array{key: string, label: string, state: string, detail: null, reason: string|null, code: string|null, required: true, action: null}>
+     * @return list<array{key: string, label: string, state: string, detail: null, reason: string|null, code: string|null, required: bool, action: null}>
      */
     public function checklist(): array
     {
-        $reasons = config()->array('docket.runs.reasons', []);
-        $fallback = config('docket.runs.copy.reason');
-        $fallback = is_string($fallback) ? $fallback : 'Something went wrong.';
-
-        return array_map(fn (array $step): array => [
+        $steps = array_map(fn (array $step): array => [
             'key' => $step['key'],
             'label' => $step['label'],
             'state' => $step['status'],
             'detail' => null,
-            'reason' => isset($step['error']) ? (is_string($reasons[$step['error']] ?? null) ? $reasons[$step['error']] : $fallback) : null,
+            'reason' => isset($step['error']) ? self::reasonFor($step['error']) : null,
             'code' => $step['error'] ?? null,
             'required' => true,
             'action' => null,
         ], $this->stepList());
+
+        // A failed child the parent did not require is a part that didn't happen, not a failed step: `skipped`, optional, with its
+        // reason, so a checklist shows the run as done with problems rather than blocked. A required one already failed the run.
+        foreach ($this->failedChildren() as $child) {
+            if (! $child['required']) {
+                $steps[] = ['key' => 'child:'.$child['id'], 'label' => $child['label'], 'state' => 'skipped', 'detail' => null, 'reason' => $child['reason'], 'code' => $child['code'], 'required' => false, 'action' => null];
+            }
+        }
+
+        return $steps;
+    }
+
+    /**
+     * The error code behind this run's failure, followed down the tree when a child caused it (`run.child_failed`, a required
+     * child's rolled-up error, or a partial run without a code), so the root reports why its work stopped.
+     *
+     * @internal
+     */
+    public function failureCode(int $depth = 0): ?string
+    {
+        $code = $this->error['code'] ?? null;
+        $childId = $this->error['params']['child'] ?? null;
+
+        if ($depth >= 10 || (is_string($code) && $code !== 'run.child_failed' && ! is_string($childId))) {
+            return is_string($code) ? $code : null;
+        }
+
+        $child = is_string($childId)
+            ? self::query()->find($childId)
+            : $this->children()->where('status', RunStatus::Failed)->where('detached', false)->latest('finished_at')->latest('id')->first();
+
+        return $child === null ? $code : ($child->failureCode($depth + 1) ?? $code);
+    }
+
+    /** The text for a failure code: `docket.runs.reasons`, else the generic `docket.runs.copy.reason`. @internal */
+    public static function reasonFor(?string $code): string
+    {
+        $reasons = config()->array('docket.runs.reasons', []);
+        if (is_string($code) && is_string($reasons[$code] ?? null)) {
+            return $reasons[$code];
+        }
+        $fallback = config('docket.runs.copy.reason');
+
+        return is_string($fallback) ? $fallback : 'Something went wrong.';
+    }
+
+    /**
+     * The direct, attached children that failed, oldest failure first and at most 20, that the current viewer may view: each with
+     * its name, label, whether it was required, its error code (followed down its own tree) and the reason to show. Empty for most
+     * runs: it reads nothing unless a child failed.
+     *
+     * @return list<array{id: string, name: string, label: string, required: bool, code: string|null, reason: string}>
+     */
+    public function failedChildren(): array
+    {
+        if ($this->children_failed === 0) {
+            return [];
+        }
+
+        $labels = config()->array('docket.runs.labels', []);
+
+        return array_values($this->children()->where('status', RunStatus::Failed)->where('detached', false)
+            ->orderBy('finished_at')->orderBy('id')->limit(20)->get()
+            ->filter(fn (Run $child) => Gate::allows('view', $child))
+            ->map(function (Run $child) use ($labels): array {
+                $code = $child->failureCode();
+
+                return [
+                    'id' => $child->id,
+                    'name' => $child->name,
+                    'label' => is_string($labels[$child->name] ?? null) ? $labels[$child->name] : $child->name,
+                    'required' => $child->required,
+                    'code' => $code,
+                    'reason' => self::reasonFor($code),
+                ];
+            })->all());
     }
 
     /** Whether the output may open in the browser: types a browser renders without running the file's own script. @internal */
@@ -505,6 +580,7 @@ class Run extends Model
             'step' => $this->step,
             'steps' => $this->stepList(),
             'checklist' => $this->checklist(),
+            'failed_children' => $this->failedChildren(),
             'progress' => $this->progress->toArray(),
             'counts' => [
                 'processed' => $this->succeeded_count + $this->failed_count + $this->skipped_count,
