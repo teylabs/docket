@@ -37,6 +37,8 @@ class PendingRun
 
     private bool $isShared = false;
 
+    private bool $isSystem = false;
+
     private bool $isDetached = false;
 
     private bool $isRequired = false;
@@ -104,27 +106,30 @@ class PendingRun
     }
 
     /**
+     * Lets `unique()`, `uniqueBy()` and `idempotencyKey()` reuse a run someone else started. Without it, start-or-reuse is per
+     * initiator: each user gets their own run. A shared run must have a `view` policy that admits everyone it is reused for
+     * (`SubjectRunPolicy`, say); a viewer it doesn't admit gets an `AuthorizationException` instead of someone else's run.
+     * During an HTTP request with nobody signed in, the guest must pass the policy too (a `?User` policy can admit guests). A
+     * console or queue process has no viewer and skips the check; so does a webhook that passes `system: true`. Implies `unique()`.
+     *
+     * @api
+     */
+    public function shared(bool $shared = true, bool $system = false): static
+    {
+        $this->isShared = $shared;
+        $this->isSystem = $shared && $system;
+        $this->isUnique = $this->isUnique || $shared;
+
+        return $this;
+    }
+
+    /**
      * Starts the run or reuses the active one with the same name, subject and these extra values (a format, a period), so a
      * repeat click, a refresh or a concurrent request gets the run already in flight. Implies `unique()`; the guard is a unique
      * database key, so two racing starts never create two runs. Values are hashed, never stored.
      *
      * @api
      */
-    /**
-     * Lets `unique()` and `uniqueBy()` reuse a run someone else started. Without it, start-or-reuse is per initiator: each user
-     * gets their own run. A shared run must have a `view` policy that admits everyone it is reused for (`SubjectRunPolicy`, say);
-     * a viewer it doesn't admit gets an `AuthorizationException` instead of someone else's run. Implies `unique()`.
-     *
-     * @api
-     */
-    public function shared(bool $shared = true): static
-    {
-        $this->isShared = $shared;
-        $this->isUnique = $this->isUnique || $shared;
-
-        return $this;
-    }
-
     public function uniqueBy(string|int ...$scope): static
     {
         $this->isUnique = true;
@@ -450,11 +455,14 @@ class PendingRun
             : [null, null];
     }
 
-    /** A shared run is handed over only to an initiator its `view` policy admits; anyone else gets an AuthorizationException. */
+    /** A shared run is handed over only to a viewer its `view` policy admits; anyone else gets an AuthorizationException. */
     private function reuse(Run $run): Run
     {
-        // A system dispatch (no initiator) has nobody to leak the run to; a viewer still meets the policy in snapshot() and the routes.
-        if ($this->isShared && $this->initiator !== null && Gate::forUser($this->initiator)->denies('view', $run)) {
+        // Fail closed: a signed-in initiator, or a guest during an HTTP request, must pass the policy. Only a console or queue process,
+        // or a dispatch that declares itself system work, has no viewer to check.
+        $unattended = $this->initiator === null && ($this->isSystem || app()->runningInConsole());
+
+        if ($this->isShared && ! $unattended && Gate::forUser($this->initiator)->denies('view', $run)) {
             throw new AuthorizationException('This run belongs to someone else.');
         }
 
