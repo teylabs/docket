@@ -175,7 +175,9 @@ class RunList
         }
 
         $links = [];
-        if ($run->status === RunStatus::Succeeded && $run->output !== null && config()->boolean('docket.routes.enabled')) {
+        if ($run->status === RunStatus::Succeeded && is_array($run->output_link)) {
+            $links['output'] = ['url' => $run->output_link['url'], 'label' => $run->output_link['label']];
+        } elseif ($run->status === RunStatus::Succeeded && $run->output !== null && config()->boolean('docket.routes.enabled')) {
             $expires = $now->copy()->addSeconds(config()->integer('docket.output_link_ttl'));
             $route = $run->outputViewable() ? 'docket.output.view' : 'docket.output';
             $links['output'] = ['url' => URL::temporarySignedRoute($route, $expires, ['token' => $run->token], absolute: false), 'label' => $this->copy('output')];
@@ -228,9 +230,13 @@ class RunList
         return max(0, min(config()->integer('docket.runs.max_linger_seconds', 3600), $linger));
     }
 
+    /**
+     * The failure reason by error code. When a run failed or finished partial because a child failed (`run.child_failed`, or a
+     * partial run with no code), the reason is the failing child's own, followed down the tree, so a root shows why its work stopped.
+     */
     private function reason(Run $run): string
     {
-        $code = $run->error['code'] ?? null;
+        $code = $this->failureCode($run);
         $reasons = config()->array('docket.runs.reasons', []);
 
         if (is_string($code) && is_string($reasons[$code] ?? null)) {
@@ -271,6 +277,22 @@ class RunList
         }
 
         return $query;
+    }
+
+    private function failureCode(Run $run, int $depth = 0): ?string
+    {
+        $code = $run->error['code'] ?? null;
+
+        if ((is_string($code) && $code !== 'run.child_failed') || $depth >= 10) {
+            return is_string($code) ? $code : null;
+        }
+
+        $childId = $run->error['params']['child'] ?? null;
+        $child = is_string($childId)
+            ? Run::query()->find($childId)
+            : $run->children()->where('status', RunStatus::Failed)->latest('finished_at')->latest('id')->first();
+
+        return $child === null ? $code : ($this->failureCode($child, $depth + 1) ?? $code);
     }
 
     /** The configured copy for a key (`docket.runs.copy.*`), else the key itself. */

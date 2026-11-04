@@ -193,3 +193,26 @@ it('emits rows in the shape the JavaScript fixture uses, so the component tests 
         ->and($payload['runs'][0]['reason'])->toBe($fixture['runs'][1]['reason'])
         ->and($payload['runs'][0]['links'])->toBe($fixture['runs'][1]['links']);
 });
+
+it('offers the run\'s recorded output link on the done row', function () {
+    $run = listedRun();
+    $run->outputLink('/records/42', 'Open the record');
+    $run->update(['status' => RunStatus::Succeeded, 'finished_at' => now()]);
+
+    expect(getJson('/docket/runs?name=report.build')->json('runs.0.links'))->toBe(['output' => ['url' => '/records/42', 'label' => 'Open the record']])
+        ->and(fn () => $run->outputLink('javascript:alert(1)', 'x'))->toThrow(InvalidArgumentException::class);
+});
+
+it('shows a failed child\'s reason on its parent, through any depth', function () {
+    config(['docket.runs.reasons' => [...config('docket.runs.reasons'), 'mail.unreadable' => 'The message could not be read.']]);
+    $root = listedRun();
+    $middle = Run::create(['name' => 'step', 'status' => RunStatus::Failed, 'parent_run_id' => $root->id, 'root_run_id' => $root->id, 'finished_at' => now(), 'error' => ['code' => 'run.child_failed', 'params' => []]]);
+    Run::create(['name' => 'leaf', 'status' => RunStatus::Failed, 'parent_run_id' => $middle->id, 'root_run_id' => $root->id, 'finished_at' => now(), 'error' => ['code' => 'mail.unreadable', 'params' => []]]);
+    $root->update(['status' => RunStatus::Failed, 'finished_at' => now(), 'error' => ['code' => 'run.child_failed', 'params' => ['child' => $middle->id]]]);
+
+    expect(getJson('/docket/runs?name=report.build')->json('runs.0.reason'))->toBe('The message could not be read.');
+
+    $root->update(['status' => RunStatus::Partial, 'error' => null]);
+    travel(1)->seconds();
+    expect(getJson('/docket/runs?name=report.build')->json('runs.0.reason'))->toBe('The message could not be read.');
+});

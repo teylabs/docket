@@ -81,14 +81,14 @@ Each row:
 | `active` | bool | no | The run is unfinished (including `slow` and `timed_out`). |
 | `tone` | string | no | `neutral`, `warning`, `danger` or `success`. |
 | `message` | string | no | The copy for the state, from `docket.runs.copy`. |
-| `reason` | string | yes | A timeout reason, or a failure reason from `docket.runs.reasons` by error code. |
+| `reason` | string | yes | A timeout reason, or a failure reason from `docket.runs.reasons` by error code. For `run.child_failed` (or a partial run without a code), the failing child's code is used, followed down the tree. |
 | `step` | object | yes | `{ key, label }`: the active or failed declared step, else the run's `step`. |
 | `steps` | array | no | As in the snapshot. |
 | `progress` | object | no | As in the snapshot. |
 | `started_at`, `finished_at` | string | `finished_at` | When the run was created, and finished. |
 | `slow_at`, `timeout_at` | string | yes | When the run becomes `slow` and `timed_out`. |
 | `linger_until` | string | yes | When a finished row drops off; `null` while active. |
-| `links.output` | object | absent | `{ url, label }`: the run's file (view link for viewable types, else download), signed. Only once succeeded. |
+| `links.output` | object | absent | `{ url, label }`: the link recorded with `outputLink()`, else the run's file (view link for viewable types, else download), signed. Only once succeeded. |
 | `links.help` | object | absent | `{ url, label }`: `docket.runs.help_url`, on `timed_out`, `failed` and `partial` rows. |
 
 ### Ticket (`run()` and dispatch responses, `Ticket::toArray()`)

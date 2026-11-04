@@ -15,6 +15,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::connection($this->getConnection())->table('docket_runs', function (Blueprint $table) {
+            $table->json('output_link')->nullable();
             $table->index(['name', 'status', 'created_at'], 'docket_runs_listing_active_index');
             $table->index(['name', 'finished_at'], 'docket_runs_listing_finished_index');
         });
@@ -30,6 +31,12 @@ return new class extends Migration
                     $table->dropIndex($index);
                 });
             }
+        }
+
+        if ($schema->hasTable('docket_runs') && $schema->hasColumn('docket_runs', 'output_link')) {
+            $schema->table('docket_runs', function (Blueprint $table) {
+                $table->dropColumn('output_link');
+            });
         }
     }
 };

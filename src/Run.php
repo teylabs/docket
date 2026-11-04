@@ -64,6 +64,7 @@ use Tey\Docket\Reporting\ReportsWork;
  * @property Carbon|null $finished_at
  * @property Carbon|null $expires_at
  * @property array<string, string>|null $steps
+ * @property array{url: string, label: string}|null $output_link
  * @property-read Progress $progress
  */
 class Run extends Model
@@ -126,6 +127,7 @@ class Run extends Model
             'result' => 'string',
             'output' => 'array',
             'steps' => 'array',
+            'output_link' => 'array',
             'total_explicit' => 'boolean',
             'dispatch_sync' => 'boolean',
             'detached' => 'boolean',
@@ -266,6 +268,23 @@ class Run extends Model
             'mime' => $mime ?? ($storage->mimeType($path) ?: 'application/octet-stream'),
             'size' => $storage->size($path),
         ]])->save();
+
+        return $this;
+    }
+
+    /**
+     * Records where the run's result lives in the application, as a URL and a label (a record page, a report). The runs list offers it
+     * on the done row in place of the file link. Use a path or URL the viewer may open; it is not signed and holds no content.
+     *
+     * @api
+     */
+    public function outputLink(string $url, string $label): static
+    {
+        if (preg_match('~^(https?://|/)~i', $url) !== 1) {
+            throw new InvalidArgumentException('An output link must be a non-empty http(s) URL or path.');
+        }
+
+        $this->forceFill(['output_link' => ['url' => $url, 'label' => $label]])->save();
 
         return $this;
     }
