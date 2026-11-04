@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref, watch, type MaybeRefOrGetter } from 'vue';
 import DocketProgress from './DocketProgress.vue';
-import { claimAutoDownload, freshDownloadLink, submitDownload, succeeded, type DocketRun } from './run';
+import { claimAutoDownload, freshDownloadLink, submitDownload, succeeded, type DocketMode, type DocketRun } from './run';
 import { useDocketRun } from './useDocketRun';
 
 /**
@@ -16,12 +16,14 @@ const props = withDefaults(defineProps<{
     autoDownload?: boolean;
     download?: (url: string) => void;
     labels?: Partial<Record<'download' | 'view' | 'close' | 'expired', string>>;
-}>(), { steps: () => ({}), autoDownload: true, download: undefined, labels: () => ({}) });
+    /** `streamed` follows the run over Server-Sent Events and polls if that fails; `polling` (the default) only polls. */
+    mode?: DocketMode;
+}>(), { steps: () => ({}), autoDownload: true, download: undefined, labels: () => ({}), mode: 'polling' });
 const open = defineModel<boolean>('open', { default: true });
 const emit = defineEmits<{ finished: [run: DocketRun] }>();
 
 const dialog = ref<HTMLDialogElement | null>(null);
-const { run, unavailable, retry } = useDocketRun(() => props.run as DocketRun | null | undefined);
+const { run, unavailable, retry } = useDocketRun(() => props.run as DocketRun | null | undefined, { mode: props.mode });
 const expired = ref(false);
 const text = { download: 'Download', view: 'View', close: 'Close', expired: 'This file is no longer available.', ...props.labels };
 

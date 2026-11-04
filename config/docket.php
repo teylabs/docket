@@ -6,6 +6,11 @@ return [
     'stale_after' => 3600,
     'poll_after_ms' => 2000,
     'output_link_ttl' => 600,
+    'stream' => [
+        'seconds' => 60,
+        'heartbeat_seconds' => 15,
+        'check_ms' => 1000,
+    ],
     'max_depth' => 10,
     'routes' => [
         'enabled' => true,

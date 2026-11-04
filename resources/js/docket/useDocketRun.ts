@@ -1,5 +1,5 @@
 import { onBeforeUnmount, ref, shallowRef, toValue, watch, type MaybeRefOrGetter } from 'vue';
-import { finished, isTicket, newer, nextDelay, type DocketRun } from './run';
+import { finished, isTicket, newer, nextDelay, openStream, type DocketMode, type DocketRun } from './run';
 
 export type DocketRunState = {
     /** The live snapshot (or the ticket until the first poll answers). */
@@ -27,21 +27,56 @@ async function request(url: string, method: 'GET' | 'POST'): Promise<Response> {
     return fetch(url, { method, headers, credentials: 'same-origin' });
 }
 
+export type DocketRunOptions = {
+    /** `polling` (the default) reads the `poll` link on a timer; `streamed` listens to the run's event stream and polls if that fails. */
+    mode?: DocketMode;
+};
+
 /**
  * Follows a Docket run: polls its `poll` link at `poll_after_ms`, waits out a 429's Retry-After, ignores late responses and
  * stops once the run finishes or the component unmounts. Pass a ticket or snapshot, a ref of one, or a getter (an Inertia prop).
+ * With `{ mode: 'streamed' }` it listens to the run's Server-Sent Events instead, and falls back to polling that run on any
+ * stream error, or at once when the browser has no EventSource.
  */
-export function useDocketRun(source: MaybeRefOrGetter<DocketRun | null | undefined> = null): DocketRunState {
+export function useDocketRun(source: MaybeRefOrGetter<DocketRun | null | undefined> = null, options: DocketRunOptions = {}): DocketRunState {
+    const mode = options.mode ?? 'polling';
     const run = shallowRef<DocketRun | null>(null);
     const unavailable = ref(false);
     let timer: ReturnType<typeof setTimeout> | null = null;
     let generation = 0;
     let failures = 0;
+    let closeStream: (() => void) | null = null;
 
     const stop = () => {
         generation++;
         if (timer) clearTimeout(timer);
         timer = null;
+        closeStream?.();
+        closeStream = null;
+    };
+
+    /** Takes a snapshot that is newer than the one held, or the first snapshot for a ticket. */
+    const accept = (incoming: DocketRun) => {
+        if (newer(run.value, incoming) || (run.value !== null && isTicket(run.value) && incoming.id === run.value.id)) run.value = incoming;
+    };
+
+    const stream = (current: number) => {
+        closeStream = openStream(run.value!, {
+            snapshot: incoming => {
+                if (current !== generation) return;
+                accept(incoming);
+                if (finished(run.value) && !isTicket(run.value!)) {
+                    closeStream?.();
+                    closeStream = null;
+                }
+            },
+            fallback: () => {
+                if (current !== generation) return;
+                closeStream = null;
+                void poll(current);
+            },
+        });
+        if (!closeStream) void poll(current);
     };
 
     const schedule = (delay: number, current: number) => {
@@ -63,7 +98,7 @@ export function useDocketRun(source: MaybeRefOrGetter<DocketRun | null | undefin
             failures = 0;
             const incoming = (await response.json()) as DocketRun;
             if (current !== generation) return;
-            if (newer(run.value, incoming) || (run.value !== null && isTicket(run.value) && incoming.id === run.value.id)) run.value = incoming;
+            accept(incoming);
             if (!finished(run.value)) schedule(nextDelay(run.value!), current);
         } catch {
             if (current !== generation) return;
@@ -78,7 +113,10 @@ export function useDocketRun(source: MaybeRefOrGetter<DocketRun | null | undefin
         failures = 0;
         unavailable.value = false;
         run.value = next;
-        if (next && (!finished(next) || isTicket(next))) void poll(generation);
+        if (next && (!finished(next) || isTicket(next))) {
+            if (mode === 'streamed') stream(generation);
+            else void poll(generation);
+        }
     };
 
     async function retry(): Promise<void> {

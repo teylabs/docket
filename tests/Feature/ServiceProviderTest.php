@@ -20,6 +20,7 @@ it('boots the provider and merges the schema and snapshot config', function () {
             'stale_after' => 3600,
             'poll_after_ms' => 2000,
             'output_link_ttl' => 600,
+            'stream' => ['seconds' => 60, 'heartbeat_seconds' => 15, 'check_ms' => 1000],
             'max_depth' => 10,
             'routes' => ['enabled' => true, 'prefix' => 'docket', 'middleware' => ['web']],
         ]);
@@ -71,16 +72,16 @@ it('publishes the migration and configuration under their documented tags', func
         ->and(array_values($configuration))->toBe([config_path('docket.php')]);
 });
 
-it('registers only the six JSON routes and the two signed output routes with web middleware and cacheable controller actions', function () {
+it('registers only the six JSON routes, the event stream and the two signed output routes with web middleware and cacheable controller actions', function () {
     $routes = collect(Route::getRoutes()->getRoutes())->filter(fn ($route) => str_starts_with($route->getName() ?? '', 'docket.'));
-    expect($routes)->toHaveCount(8);
+    expect($routes)->toHaveCount(9);
     $cacheable = new RouteCollection;
     foreach ($routes as $route) {
         expect($route->gatherMiddleware())->toContain('web');
         $route->prepareForSerialization();
         $cacheable->add($route);
     }
-    expect($cacheable->compile()['attributes'])->toHaveKeys(['docket.show', 'docket.items', 'docket.logs', 'docket.children', 'docket.cancel', 'docket.retry', 'docket.output', 'docket.output.view']);
+    expect($cacheable->compile()['attributes'])->toHaveKeys(['docket.show', 'docket.stream', 'docket.items', 'docket.logs', 'docket.children', 'docket.cancel', 'docket.retry', 'docket.output', 'docket.output.view']);
     expect($routes->filter(fn ($route) => str_starts_with($route->getName(), 'docket.output'))->every(fn ($route) => in_array('signed:relative', $route->gatherMiddleware(), true)))->toBeTrue();
     getJson('/docket/runs/unknown/watch')->assertNotFound();
 });

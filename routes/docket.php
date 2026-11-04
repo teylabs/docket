@@ -9,6 +9,7 @@ Route::prefix(config()->string('docket.routes.prefix'))
     ->name('docket.')
     ->group(function (): void {
         Route::get('runs/{token}', [RunController::class, 'show'])->name('show');
+        Route::get('runs/{token}/stream', [RunController::class, 'events'])->name('stream');
         Route::get('runs/{token}/items', [RunController::class, 'items'])->name('items');
         Route::get('runs/{token}/logs', [RunController::class, 'logs'])->name('logs');
         Route::get('runs/{token}/children', [RunController::class, 'children'])->name('children');

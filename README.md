@@ -5,7 +5,7 @@
 
 > [!NOTE]
 > Docket 0.1 is released. This README describes the accepted design for 0.1–0.3; [docs/reference.md](docs/reference.md) tags every entry with the milestone it lands in.
-> 0.1 ships the runs, items and logs schema, queued and inline runs, JSON tickets, reporting from the work, run trees, loop protection, cancel/retry, pruning, testing fakes, the package JSON routes and the default policy. 0.3 adds run outputs and the Vue components (`useDocketRun`, `<DocketProgress>`, `<DocketRunModal>`). The React, Blade and Livewire surfaces, `<DocketTree>`, the watch page and external workers are not implemented yet.
+> 0.1 ships the runs, items and logs schema, queued and inline runs, JSON tickets, reporting from the work, run trees, loop protection, cancel/retry, pruning, testing fakes, the package JSON routes and the default policy. 0.3 adds run outputs and the Vue components (`useDocketRun`, `<DocketProgress>`, `<DocketRunModal>`). 0.4 adds a streamed mode that pushes progress over Server-Sent Events. The React, Blade and Livewire surfaces, `<DocketTree>`, the watch page and external workers are not implemented yet.
 > Opt-in tenant-scoped authorization is implemented for 0.2 but not released.
 
 Docket wraps any piece of work in your Laravel app, from one statement to a queued import of a million rows, in a run: a durable record that it happened, with a ticket you can hand to a page, a console or an API client. Code running inside the work, down to a model observer, can report to the run as it goes. Long work usually means a spinner, a status column, a progress table and a polling endpoint written for each feature. With Docket, each one reads the same status, even after a reload, and can retry only the rows that failed.
@@ -971,6 +971,7 @@ Tickets and snapshots link to routes that Docket registers. Each route runs your
 | Route | Ability | Returns |
 | --- | --- | --- |
 | `GET /docket/runs/{token}` | `view` | the snapshot |
+| `GET /docket/runs/{token}/stream` | `view` | the snapshot as Server-Sent Events (see [Streamed Mode](#streamed-mode)) |
 | `GET /docket/runs/{token}/items?status=failed` | `view` | cursor-paginated items |
 | `GET /docket/runs/{token}/logs` | `view` | cursor-paginated logs |
 | `GET /docket/runs/{token}/children` | `view` | cursor-paginated child tickets, each with progress and latest log (each child also checked) |
@@ -1034,6 +1035,22 @@ const { run, unavailable, retry } = useDocketRun(() => props.run)
 `useDocketRun()` takes a ticket or snapshot, a ref of one, or a getter such as a page prop. It polls the run's `poll` link at `poll_after_ms`, waits out a 429's `Retry-After`, ignores responses older than the snapshot it holds, and stops when the run finishes or the component unmounts. `retry()` posts to the run's `retry` link and follows the new run.
 
 `<DocketProgress>` shows the step (through your `steps` labels), a native `<progress>` bar that is determinate when the run knows its total and indeterminate otherwise, failed and skipped counts, and a final state with Retry. Its status line is a polite live region. The markup is unstyled: style it through the `data-docket-*` attributes, or replace the final state with the `final` slot.
+
+### Streamed Mode
+
+Polling is the default. Pass `mode: 'streamed'` to have the server push each change instead:
+
+```ts
+const { run, unavailable } = useDocketRun(() => props.run, { mode: 'streamed' })
+```
+
+```vue
+<DocketRunModal v-model:open="building" :run="ticket" title="Building the report" mode="streamed" />
+```
+
+Streamed mode opens an `EventSource` on `GET /docket/runs/{token}/stream`, which runs the same `view` policy as the snapshot. The server sends a `snapshot` event at once and again whenever the run's revision changes (it checks every `docket.stream.check_ms`), a comment line every `docket.stream.heartbeat_seconds` so idle proxies keep the connection open, and an `end` event when the run finishes or after `docket.stream.seconds`. On a `timeout` end the client reconnects at once. It sends `X-Accel-Buffering: no` and flushes each event, so nginx-style proxies pass events through as they happen.
+
+If the browser has no `EventSource`, or the stream errors in any way (a proxy that buffers or cuts it, a lost connection, access revoked, a garbled event), the composable closes the stream and polls that run instead, exactly as in polling mode. A stream holds a PHP worker for up to `docket.stream.seconds`, so size your workers for the number of people watching at once, or lower it.
 
 ### Runs That Produce a File
 
@@ -1294,7 +1311,10 @@ php artisan vendor:publish --tag=docket-config
 | --- | --- | --- |
 | `ttl` | `86400` | Seconds a finished run is kept when it has no `expiresAt()`. |
 | `stale_after` | `3600` | Seconds without a report before a run fails as `run.stalled`, when the job has no `$timeout`. |
-| `poll_after_ms` | `2000` | The poll interval suggested to clients. |
+| `poll_after_ms` | `2000` | The poll interval suggested to clients, and the reconnect delay a stream suggests. |
+| `stream.seconds` | `60` | How long one event stream stays open before it ends with `timeout` and the client reconnects. |
+| `stream.heartbeat_seconds` | `15` | How often an idle stream sends a comment line. |
+| `stream.check_ms` | `1000` | How often a stream reads the run for a new revision (at least 250). |
 | `routes.enabled` | `true` | Register the package routes. |
 | `routes.prefix` | `docket` | Their URL prefix. |
 | `routes.middleware` | `['web']` | Their middleware, for example `['api', 'auth:sanctum']`. |
