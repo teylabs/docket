@@ -295,7 +295,14 @@ class PendingRun
         }
         // A shared run without a scope keeps the key 0.1 stored, so runs started before an upgrade are still found.
         $unique = $this->isUnique ? hash('sha256', serialize($this->uniqueScope === [] ? $identity : [...$identity, $this->uniqueScope])) : null;
-        $key = $this->key === null ? null : hash('sha256', serialize([$this->name, $this->key]));
+        // The same initiator rule as for unique(): an idempotency key is per user unless the run is shared.
+        $key = $this->key === null ? null : hash('sha256', serialize($this->isShared ? [$this->name, $this->key] : [$this->name, $this->key, ['initiator', ...$this->initiatorIdentity()]]));
+
+        // Nobody to attribute the run to (a guest, a command, a job, a webhook) and not shared: never reuse, start a fresh run.
+        if (! $this->isShared && $this->initiatorIdentity() === [null, null]) {
+            $unique = null;
+            $key = null;
+        }
 
         if ($existing = $this->existing($unique, $key)) {
             return $this->reuse($existing)->ticket();
@@ -399,6 +406,18 @@ class PendingRun
             if ($run !== null) {
                 return $run;
             }
+
+            // A key stored before 0.6.6 has no initiator in it: still honour it, but only for the user who used it.
+            if (! $this->isShared && $this->key !== null) {
+                [$type, $id] = $this->initiatorIdentity();
+                $run = Run::query()->where('idempotency_key', hash('sha256', serialize([$this->name, $this->key])))
+                    ->where('initiator_type', $type)->where('initiator_id', $id)
+                    ->where(fn ($query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', now()))->first();
+
+                if ($run !== null) {
+                    return $run;
+                }
+            }
         }
 
         if ($unique === null) {
@@ -431,10 +450,11 @@ class PendingRun
             : [null, null];
     }
 
-    /** A shared run is handed over only to someone its `view` policy admits; anyone else gets an AuthorizationException. */
+    /** A shared run is handed over only to an initiator its `view` policy admits; anyone else gets an AuthorizationException. */
     private function reuse(Run $run): Run
     {
-        if ($this->isShared && Gate::forUser($this->initiator)->denies('view', $run)) {
+        // A system dispatch (no initiator) has nobody to leak the run to; a viewer still meets the policy in snapshot() and the routes.
+        if ($this->isShared && $this->initiator !== null && Gate::forUser($this->initiator)->denies('view', $run)) {
             throw new AuthorizationException('This run belongs to someone else.');
         }
 

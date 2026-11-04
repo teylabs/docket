@@ -327,6 +327,8 @@ it('attributes an uncaught synchronous dispatch exception to its child', functio
 });
 
 it('does not attach deduplicated runs or count the same queued completion twice', function () {
+    signInAs(); // reuse is per initiator: an unattributed dispatch always starts fresh
+
     Event::fake([RunFinished::class]);
     $existing = Docket::idempotencyKey('shared')->run('existing', fn () => null);
     $root = Docket::run('root', function () use ($existing) {

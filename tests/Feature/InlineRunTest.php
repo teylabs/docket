@@ -175,6 +175,8 @@ it('preserves an exception failure when the application transaction subsequently
 });
 
 it('does not rerun unique or idempotent work and does not invent an in-process result', function () {
+    signInAs(); // reuse is per initiator: an unattributed dispatch always starts fresh
+
     $first = Docket::idempotencyKey('key')->run('report.build', fn () => 1);
     $second = Docket::idempotencyKey('key')->run('report.build', fn () => throw new RuntimeException);
     expect($second->id)->toBe($first->id)->and(fn () => $second->result())->toThrow(ResultNotAvailable::class);
