@@ -128,3 +128,75 @@ export function claimAutoDownload(runId: string): boolean {
 
     return true;
 }
+
+/** How a watcher follows a run: `polling` reads the `poll` link on a timer; `streamed` listens to its Server-Sent Events. */
+export type DocketMode = 'streamed' | 'polling';
+
+/** The run's event stream, next to its `poll` link; null when the run has no routes. */
+export const streamUrl = (run: Pick<DocketRun, 'links'>): string | null => (run.links.poll ? `${run.links.poll}/stream` : null);
+
+type EventSourceLike = {
+    addEventListener(type: string, listener: (event: { data: string }) => void): void;
+    onerror: ((event: unknown) => void) | null;
+    close(): void;
+};
+
+/**
+ * Listens to a run's event stream. Each `snapshot` event goes to `snapshot`. The server ends a stream with an `end` event:
+ * `finished` closes it, `timeout` reconnects at once, and `unavailable`, any connection error or a garbled event closes it
+ * for good and calls `fallback` once, so the caller can poll instead. Returns a function that closes the stream, or null
+ * when streaming isn't possible (no EventSource, or no routes), in which case the caller should poll.
+ */
+export function openStream(
+    run: Pick<DocketRun, 'links'>,
+    handlers: { snapshot: (run: DocketRun) => void; fallback: () => void },
+    Source: (new (url: string, init?: { withCredentials?: boolean }) => EventSourceLike) | undefined = (globalThis as { EventSource?: new (url: string) => EventSourceLike }).EventSource,
+): (() => void) | null {
+    const url = streamUrl(run);
+    if (!url || typeof Source !== 'function') return null;
+    let source: EventSourceLike | null = null;
+    let closed = false;
+
+    const close = () => {
+        closed = true;
+        source?.close();
+    };
+    const fail = () => {
+        if (closed) return;
+        close();
+        handlers.fallback();
+    };
+    const connect = () => {
+        const current = new Source(url, { withCredentials: true });
+        source = current;
+        current.addEventListener('snapshot', event => {
+            try {
+                handlers.snapshot(JSON.parse(event.data) as DocketRun);
+            } catch {
+                fail();
+            }
+        });
+        current.addEventListener('end', event => {
+            let reason: unknown = null;
+            try {
+                reason = (JSON.parse(event.data) as { reason?: unknown }).reason;
+            } catch {
+                // An unreadable end is treated as unavailable.
+            }
+            if (reason === 'timeout' && !closed) {
+                current.close();
+                connect();
+            } else if (reason === 'finished') {
+                close();
+            } else {
+                fail();
+            }
+        });
+        // EventSource would reconnect by itself after an error; polling is the safer fallback (a proxy that buffers or cuts streams).
+        current.onerror = () => fail();
+    };
+
+    connect();
+
+    return close;
+}

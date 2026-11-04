@@ -53,7 +53,7 @@ it('makes unknown expired unviewable and scheduled runs indistinguishable on eve
         ->and($hidden->refresh()->cancel_requested)->toBeFalse()
         ->and(Run::count())->toBe(3);
 })->with([
-    ['GET', ''], ['GET', '/items'], ['GET', '/logs'], ['GET', '/children'],
+    ['GET', ''], ['GET', '/stream'], ['GET', '/items'], ['GET', '/logs'], ['GET', '/children'],
     ['POST', '/cancel'], ['POST', '/retry'],
 ]);
 

@@ -10,6 +10,7 @@ use Tey\Docket\Tests\Fixtures\User;
 
 use function Pest\Laravel\actingAs;
 use function Pest\Laravel\get;
+use function Pest\Laravel\getJson;
 use function Pest\Laravel\travel;
 
 beforeEach(function () {
@@ -78,6 +79,25 @@ it('needs a valid, unexpired signature, the view policy and a live run', functio
     $link = $fresh->toArray()['links']['download'];
     travel(config('docket.output_link_ttl') + 1)->seconds();
     get($link)->assertForbidden();
+});
+
+it('shows a browser with an expired link a plain page with a way back, and keeps JSON for API clients', function () {
+    config(['docket.expired_link' => ['url' => '/reports', 'label' => 'Back to reports']]);
+    Storage::disk('private')->put('builds/a1.pdf', '%PDF-1.7 report');
+    $link = outputRun()->output('builds/a1.pdf', 'private', 'Report.pdf', 'application/pdf')->toArray()['links']['view'];
+    travel(config('docket.output_link_ttl') + 1)->seconds();
+
+    foreach ([fn () => actingAs(new User(['id' => 1])), fn () => auth()->forgetGuards()] as $as) {
+        $as();
+        get($link, ['Accept' => 'text/html,application/xhtml+xml'])->assertForbidden()
+            ->assertHeader('Content-Type', 'text/html; charset=utf-8')
+            ->assertHeaderMissing('Location')
+            ->assertSee('This link has expired')
+            ->assertSee('href="/reports"', false)
+            ->assertSee('Back to reports')
+            ->assertDontSee('%PDF');
+        getJson($link)->assertForbidden()->assertExactJson(['message' => 'Invalid signature.']);
+    }
 });
 
 it('answers not found when the run has no output or the file is gone', function () {

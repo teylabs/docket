@@ -1,6 +1,7 @@
 <?php
 
 use Illuminate\Support\Facades\Route;
+use Tey\Docket\Http\OutputSignature;
 use Tey\Docket\Http\RunController;
 use Tey\Docket\Http\RunRequest;
 
@@ -9,11 +10,12 @@ Route::prefix(config()->string('docket.routes.prefix'))
     ->name('docket.')
     ->group(function (): void {
         Route::get('runs/{token}', [RunController::class, 'show'])->name('show');
+        Route::get('runs/{token}/stream', [RunController::class, 'events'])->name('stream');
         Route::get('runs/{token}/items', [RunController::class, 'items'])->name('items');
         Route::get('runs/{token}/logs', [RunController::class, 'logs'])->name('logs');
         Route::get('runs/{token}/children', [RunController::class, 'children'])->name('children');
         Route::post('runs/{token}/cancel', [RunController::class, 'cancel'])->name('cancel');
         Route::post('runs/{token}/retry', [RunController::class, 'retry'])->name('retry');
-        Route::get('runs/{token}/output', [RunController::class, 'output'])->middleware('signed:relative')->name('output');
-        Route::get('runs/{token}/output/view', [RunController::class, 'view'])->middleware('signed:relative')->name('output.view');
+        Route::get('runs/{token}/output', [RunController::class, 'output'])->middleware(OutputSignature::class)->name('output');
+        Route::get('runs/{token}/output/view', [RunController::class, 'view'])->middleware(OutputSignature::class)->name('output.view');
     });

@@ -377,7 +377,7 @@ The policy requires an authenticated viewer and uses that viewer, including an e
 
 ### Routes
 
-The table in the README. Package JSON routes: 0.1. The watch page: 0.2. The external update route `POST /docket/runs/{id}/updates` (writer grants): 0.3.
+The table in the README. Package JSON routes: 0.1. The watch page: 0.2. The external update route `POST /docket/runs/{id}/updates` (writer grants): 0.3. The event stream `GET /docket/runs/{token}/stream` (streamed mode): 0.4.
 
 Released in 0.1.0 (#12):
 

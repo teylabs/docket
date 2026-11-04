@@ -42,6 +42,8 @@ class DocketServiceProvider extends ServiceProvider
             Gate::policy(Run::class, Policies\RunPolicy::class);
         }
 
+        $this->loadViewsFrom(__DIR__.'/../resources/views', 'docket');
+
         if (config()->boolean('docket.routes.enabled')) {
             $this->loadRoutesFrom(__DIR__.'/../routes/docket.php');
         }
@@ -72,6 +74,10 @@ class DocketServiceProvider extends ServiceProvider
             $this->publishes([
                 __DIR__.'/../resources/js/docket' => resource_path('js/docket'),
             ], 'docket-vue');
+
+            $this->publishes([
+                __DIR__.'/../resources/views' => resource_path('views/vendor/docket'),
+            ], 'docket-views');
 
             $this->publishesMigrations([
                 __DIR__.'/../database/migrations' => database_path('migrations'),

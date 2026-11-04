@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ensureDownloadFrame, isTicket, claimAutoDownload, finished, formFields, freshDownloadLink, newer, nextDelay, percent, submitDownload } from './run.ts';
+import { ensureDownloadFrame, isTicket, claimAutoDownload, finished, formFields, freshDownloadLink, newer, nextDelay, openStream, percent, streamUrl, submitDownload } from './run.ts';
 
 const run = (overrides = {}) => ({ schema_version: 1, id: 'r1', token: 't', name: 'build', status: 'running', revision: 1, poll_after_ms: 2000, links: {}, ...overrides });
 
@@ -83,4 +83,73 @@ test('ensureDownloadFrame creates the frame once and always returns its name', (
 test('a ticket is told apart from a snapshot, so a run that finished before its ticket arrived is still read once', () => {
     assert.equal(isTicket({ schema_version: 1, id: 'r', token: 't', name: 'n', status: 'succeeded', revision: 3, poll_after_ms: null, links: { poll: '/p' } }), true);
     assert.equal(isTicket(run({ status: 'succeeded', progress: { done: 1, total: 1, percent: 100 } })), false);
+});
+
+class FakeSource {
+    static opened = [];
+    constructor(url, init) {
+        this.url = url;
+        this.init = init;
+        this.listeners = {};
+        this.onerror = null;
+        this.closed = false;
+        FakeSource.opened.push(this);
+    }
+    addEventListener(type, listener) { (this.listeners[type] ??= []).push(listener); }
+    emit(type, data) { for (const listener of this.listeners[type] ?? []) listener({ data: typeof data === 'string' ? data : JSON.stringify(data) }); }
+    close() { this.closed = true; }
+}
+
+const watchStream = () => {
+    FakeSource.opened = [];
+    const seen = { snapshots: [], fallbacks: 0 };
+    const close = openStream(run({ links: { poll: '/docket/runs/t' } }), { snapshot: s => seen.snapshots.push(s), fallback: () => seen.fallbacks++ }, FakeSource);
+
+    return { close, seen, source: () => FakeSource.opened.at(-1) };
+};
+
+test('the stream sits next to the poll link, and there is none without routes', () => {
+    assert.equal(streamUrl(run({ links: { poll: '/docket/runs/t' } })), '/docket/runs/t/stream');
+    assert.equal(streamUrl(run()), null);
+    assert.equal(openStream(run(), { snapshot() {}, fallback() {} }, FakeSource), null);
+    assert.equal(openStream(run({ links: { poll: '/p' } }), { snapshot() {}, fallback() {} }, undefined), null);
+});
+
+test('snapshots are handed over and a finished stream closes without falling back', () => {
+    const { seen, source } = watchStream();
+    assert.equal(source().url, '/docket/runs/t/stream');
+    source().emit('snapshot', run({ revision: 2 }));
+    source().emit('end', { reason: 'finished' });
+    assert.deepEqual(seen.snapshots.map(s => s.revision), [2]);
+    assert.equal(seen.fallbacks, 0);
+    assert.equal(source().closed, true);
+});
+
+test('a timed-out stream reconnects instead of falling back', () => {
+    const { seen, source } = watchStream();
+    const first = source();
+    first.emit('end', { reason: 'timeout' });
+    assert.equal(first.closed, true);
+    assert.equal(FakeSource.opened.length, 2);
+    assert.equal(source().closed, false);
+    assert.equal(seen.fallbacks, 0);
+});
+
+test('an error, an unavailable run or a garbled event falls back to polling exactly once', () => {
+    for (const trigger of [s => s.onerror({}), s => s.emit('end', { reason: 'unavailable' }), s => s.emit('snapshot', '{not json')]) {
+        const { seen, source } = watchStream();
+        trigger(source());
+        source().onerror({});
+        assert.equal(seen.fallbacks, 1);
+        assert.equal(source().closed, true);
+        assert.equal(FakeSource.opened.length, 1);
+    }
+});
+
+test('closing the stream stops it without a fallback', () => {
+    const { close, seen, source } = watchStream();
+    close();
+    source().onerror({});
+    assert.equal(source().closed, true);
+    assert.equal(seen.fallbacks, 0);
 });

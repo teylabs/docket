@@ -7,6 +7,7 @@ use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\RateLimiter;
 use Illuminate\Support\Facades\Storage;
+use Illuminate\Support\Sleep;
 use Illuminate\Validation\Rule;
 use LogicException;
 use Symfony\Component\HttpFoundation\StreamedResponse;
@@ -27,6 +28,80 @@ class RunController
         RateLimiter::hit($key, $seconds);
 
         return response()->json($run);
+    }
+
+    /**
+     * Pushes the snapshot as Server-Sent Events: once at the start, then whenever its revision changes. A comment line keeps
+     * idle proxies from closing the connection, and the stream ends when the run finishes or after `docket.stream.seconds`,
+     * with an `end` event so the client knows to reconnect rather than treat the close as an error.
+     */
+    public function events(string $token): StreamedResponse
+    {
+        $run = $this->resolve($token);
+
+        return response()->stream(function () use ($run): void {
+            $seconds = max(0, config()->integer('docket.stream.seconds', 60));
+            $heartbeat = max(1, config()->integer('docket.stream.heartbeat_seconds', 15));
+            $interval = max(250, config()->integer('docket.stream.check_ms', 1000));
+            $started = now();
+            $lastBeat = now();
+            $revision = null;
+
+            $this->send('retry: '.max(1000, config()->integer('docket.poll_after_ms'))."\n\n");
+
+            while (true) {
+                $fresh = Run::query()->whereKey($run->getKey())->first();
+                if ($fresh === null || $fresh->expires_at?->lessThanOrEqualTo(now()) || Gate::denies('view', $fresh)) {
+                    $this->send("event: end\ndata: {\"reason\":\"unavailable\"}\n\n");
+
+                    return;
+                }
+
+                if ($fresh->revision !== $revision || $fresh->finished()) {
+                    $revision = $fresh->revision;
+                    $this->send('id: '.$fresh->revision."\nevent: snapshot\ndata: ".$fresh->toJson()."\n\n");
+                }
+
+                if ($fresh->finished()) {
+                    $this->send("event: end\ndata: {\"reason\":\"finished\"}\n\n");
+
+                    return;
+                }
+
+                if ($started->diffInSeconds(now()) >= $seconds) {
+                    $this->send("event: end\ndata: {\"reason\":\"timeout\"}\n\n");
+
+                    return;
+                }
+
+                if ($lastBeat->diffInSeconds(now()) >= $heartbeat) {
+                    $this->send(": heartbeat\n\n");
+                    $lastBeat = now();
+                }
+
+                if (connection_aborted() === 1) {
+                    return;
+                }
+
+                Sleep::usleep($interval * 1000);
+            }
+        }, 200, [
+            'Content-Type' => 'text/event-stream',
+            'Cache-Control' => 'private, no-store',
+            'X-Accel-Buffering' => 'no',
+            'Connection' => 'keep-alive',
+        ]);
+    }
+
+    private function send(string $frame): void
+    {
+        echo $frame;
+
+        if (ob_get_level() > 0) {
+            ob_flush();
+        }
+
+        flush();
     }
 
     public function items(Request $request, string $token): JsonResponse
