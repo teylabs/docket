@@ -163,3 +163,42 @@ test('a partial row lists its failed children with the server\'s reasons', async
     assert.match(html, /data-docket-run-failed-child data-required="false"><span data-docket-run-failed-child-label>Reading the message<\/span> <span data-docket-run-failed-child-reason>The message could not be read.<\/span>/);
     assert.doesNotMatch(html, /mail\.unreadable/);
 });
+
+const { default: DocketRunDialog } = await import('./DocketRunDialog.vue');
+const dialogItems = states => [['prepare', 'Preparing data'], ['render', 'Rendering PDF'], ['save', 'Saving']].map(([key, label], i) => ({ key, label, state: states[i], detail: null, reason: null, code: null, required: true, action: null }));
+
+test('the run dialog paints the first snapshot\'s steps through the steps slot while running, with no actions yet', async () => {
+    const seen = [];
+    const html = await render(DocketRunDialog, { run: run({ checklist: dialogItems(['done', 'active', 'pending']) }) }, { steps: props => (seen.push(props), h('ol', { 'data-host': '' }, props.items.map(item => h('li', { 'data-state': item.state }, item.label)))) });
+    assert.deepEqual(seen[0].items.map(item => item.state), ['done', 'active', 'pending']);
+    assert.equal(seen[0].enabled, false);
+    assert.equal(seen[0].finished, false);
+    assert.doesNotMatch(html, /data-docket-download|data-docket-retry|role="alert"|<h\d/);
+});
+
+test('a failed run shows only the failed step, one alert with the server\'s reason and Retry, and no download', async () => {
+    const failed = run({
+        status: 'failed', output: { name: 'r.pdf', mime: 'application/pdf', size: 3 }, links: { retry: '/r', download: '/d' },
+        checklist: [...dialogItems(['done', 'failed', 'pending']).slice(0, 1), { ...dialogItems(['', 'failed'])[1], reason: 'The renderer timed out.', code: 'report.render_failed' }, dialogItems(['', '', 'pending'])[2]],
+        failure: { step: 'Rendering PDF', code: 'report.render_failed', reason: 'The renderer timed out.' },
+    });
+    const html = await render(DocketRunDialog, { run: failed });
+    assert.equal((html.match(/<li data-docket-step/g) ?? []).length, 1);
+    assert.match(html, /data-status="failed"[^>]*><span data-docket-step-label>Rendering PDF<\/span><\/li>/);
+    assert.equal((html.match(/The renderer timed out\./g) ?? []).length, 1);
+    assert.equal((html.match(/role="alert"/g) ?? []).length, 1);
+    assert.match(html, /<button type="button" data-docket-retry>Try again<\/button>/);
+    assert.doesNotMatch(html, /data-docket-download|Preparing data|Saving|report\.render_failed|<h\d/);
+});
+
+test('a done run enables the steps slot and offers Download and View through the actions', async () => {
+    const done = run({ status: 'succeeded', output: { name: 'r.pdf', mime: 'application/pdf', size: 3 }, links: { download: '/d', view: '/v' }, checklist: dialogItems(['done', 'done', 'done']) });
+    const seen = [];
+    const html = await render(DocketRunDialog, { run: done }, { steps: props => (seen.push(props), h('ol')) });
+    assert.equal(seen[0].enabled, true);
+    assert.match(html, /<button type="button" data-docket-download>Download<\/button><a href="\/v" target="_blank" rel="noopener" data-docket-view>View<\/a>/);
+    assert.doesNotMatch(html, /role="alert"|data-docket-retry/);
+
+    const settling = await render(DocketRunDialog, { run: { ...done, settling: true } });
+    assert.doesNotMatch(settling, /data-docket-download/);
+});

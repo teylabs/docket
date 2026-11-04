@@ -1119,6 +1119,34 @@ Docket keeps a reference to the file, never a copy; your application owns its li
 
 When the run succeeds, `<DocketRunModal>` shows Download and View and starts the download at once (once per run on the page, even if the dialog opens again) by submitting a hidden GET form to `links.download`, aimed at a hidden frame. The browser saves the file while the page and dialog stay put, no popup blocker is involved, and an error answer lands in the frame instead of over the page. A later click on Download reads the run again first, so the link is freshly signed; if the file is gone, the dialog says so. Pass `:auto-download="false"` to wait for a click, `:download="url => yourForm.submit(url, { target: ensureDownloadFrame() })"` to reuse your own form component (always aim it at `ensureDownloadFrame()`: a form aimed at a missing frame opens a window, which the popup blocker stops), or the `complete` slot to replace the buttons.
 
+### Run in a Modal
+
+Open a modal with a POST link to your controller. The controller starts the run, or reuses the active one, and passes its snapshot as the modal's prop: one request, and a repeat click or a refresh shows the same run.
+
+```php
+// app/Http/Controllers/ReportPreviewController.php
+public function store(Report $report)
+{
+    $ticket = Docket::job(new BuildPreview($report))->name('report.preview')->about($report)->uniqueBy('pdf')->dispatch();
+
+    return Inertia::modal('Reports/Preview', ['run' => $ticket->snapshot()]);
+}
+```
+
+```php
+// app/Jobs/BuildPreview.php: write to a path of this run's own
+$path = $run->outputPath('Preview.pdf', 'previews'); // previews/{run id}/Preview.pdf
+$run->output($path, disk: 'local', mime: 'application/pdf');
+```
+
+```vue
+<DocketRunDialog :run="run">
+  <template #steps="{ items }"><Checklist :items="items" label="Building the preview" /></template>
+</DocketRunDialog>
+```
+
+`uniqueBy(...$values)` implies `unique()` and scopes it further. A plain `unique()` still reuses any active run with that name and subject. A unique database key guards the start, so concurrent requests get one run. `$ticket->snapshot()` (or `Docket::snapshot($run)`) is the run's full snapshot, with `links.stream` and the `checklist`, so the dialog paints at once. `<DocketRunDialog>` streams the run and falls back to polling. Its `steps` slot gets `items`, `enabled` and `finished`, and its `actions` slot gets `download`, `retry`, `enabled` and `failed`. When the run fails, it shows only the failed step, one alert with the snapshot's `failure.reason`, and Retry; there is no download.
+
 ### Runs in Progress
 
 List the runs of one type that are active or just finished, for example on a dashboard, with `<DocketRunsWidget>`:

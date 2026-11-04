@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## [0.6.4] - 2026-11-04
+
+### Added
+
+- Run in a modal: the host's controller starts or reuses the run and hands the dialog its snapshot, in one request.
+  - `->uniqueBy(...$values)` starts the run or returns the active one with the same name, subject and extra values (a format, a period). It implies `unique()`, and the unique database key means two racing starts never create two runs. (#61)
+  - `$ticket->snapshot()` and `Docket::snapshot($runOrTicket)` return the full first snapshot for a page or modal prop (token, `links.poll`, `links.stream`, `steps`, `checklist`, `failure`), so the first paint needs no fetch. Snapshots gain `links.stream` and `failure` (`{ step, code, reason }`, once, for a failed run). (#61)
+  - `<DocketRunDialog :run>` is the dialog body. It paints the snapshot, streams the run (falling back to polling), and has a `steps` slot (`items`, `enabled`, `finished`) for a checklist component and an `actions` slot (`download`, `retry`). A failed run shows only the failed step, one alert with the server's reason and Retry, with no download and no duplicated text. (#61)
+  - `$run->outputPath($name, $directory)` gives each run its own storage path, `{directory}/{run id}/{name}`, so two builds never write over each other's file. (#61)
+
 ## [0.6.3] - 2026-11-04
 
 ### Fixed

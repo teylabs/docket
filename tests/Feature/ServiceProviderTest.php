@@ -72,7 +72,7 @@ it('publishes the Vue components under docket-vue to the README\'s @/docket fold
     $vue = DocketServiceProvider::pathsToPublish(DocketServiceProvider::class, 'docket-vue');
 
     expect(array_values($vue))->toBe([resource_path('js/docket')]);
-    foreach (['index.ts', 'run.ts', 'runs.ts', 'useDocketRun.ts', 'useDocketRuns.ts', 'DocketProgress.vue', 'DocketRunModal.vue', 'DocketRunsWidget.vue'] as $file) {
+    foreach (['index.ts', 'run.ts', 'runs.ts', 'useDocketRun.ts', 'useDocketRuns.ts', 'DocketProgress.vue', 'DocketRunModal.vue', 'DocketRunDialog.vue', 'DocketRunsWidget.vue'] as $file) {
         expect(array_key_first($vue).'/'.$file)->toBeFile();
     }
 });
