@@ -33,7 +33,7 @@ class Docket
      */
     public function snapshot(Run|Ticket $run): array
     {
-        return $run instanceof Ticket ? $run->snapshot() : $run->toArray();
+        return ($run instanceof Ticket ? $run : $run->ticket())->snapshot();
     }
 
     public function find(string $token): ?Run
@@ -96,6 +96,11 @@ class Docket
     public function allowRepeat(): PendingRun
     {
         return $this->pending()->allowRepeat();
+    }
+
+    public function shared(bool $shared = true): PendingRun
+    {
+        return $this->pending()->shared($shared);
     }
 
     public function unique(): PendingRun

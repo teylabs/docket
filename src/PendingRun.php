@@ -4,9 +4,11 @@ namespace Tey\Docket;
 
 use Closure;
 use DateTimeInterface;
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 use Laravel\SerializableClosure\SerializableClosure;
 use Tey\Docket\Dispatch\Dispatcher;
@@ -32,6 +34,8 @@ class PendingRun
 
     /** @var list<string> */
     private array $uniqueScope = [];
+
+    private bool $isShared = false;
 
     private bool $isDetached = false;
 
@@ -106,6 +110,21 @@ class PendingRun
      *
      * @api
      */
+    /**
+     * Lets `unique()` and `uniqueBy()` reuse a run someone else started. Without it, start-or-reuse is per initiator: each user
+     * gets their own run. A shared run must have a `view` policy that admits everyone it is reused for (`SubjectRunPolicy`, say);
+     * a viewer it doesn't admit gets an `AuthorizationException` instead of someone else's run. Implies `unique()`.
+     *
+     * @api
+     */
+    public function shared(bool $shared = true): static
+    {
+        $this->isShared = $shared;
+        $this->isUnique = $this->isUnique || $shared;
+
+        return $this;
+    }
+
     public function uniqueBy(string|int ...$scope): static
     {
         $this->isUnique = true;
@@ -270,12 +289,16 @@ class PendingRun
     {
         $subjectKey = $this->subject?->getKey();
         $identity = [$this->name, $this->subject?->getMorphClass(), is_int($subjectKey) ? (string) $subjectKey : $subjectKey];
-        // Without a scope the key is what 0.1 stored, so runs started before an upgrade are still found.
+        // Fail closed: unless the run is shared, it belongs to its initiator, so one user never reuses another's run.
+        if (! $this->isShared) {
+            $identity[] = ['initiator', ...$this->initiatorIdentity()];
+        }
+        // A shared run without a scope keeps the key 0.1 stored, so runs started before an upgrade are still found.
         $unique = $this->isUnique ? hash('sha256', serialize($this->uniqueScope === [] ? $identity : [...$identity, $this->uniqueScope])) : null;
         $key = $this->key === null ? null : hash('sha256', serialize([$this->name, $this->key]));
 
         if ($existing = $this->existing($unique, $key)) {
-            return $existing->ticket();
+            return $this->reuse($existing)->ticket();
         }
 
         $fingerprints = [];
@@ -345,7 +368,7 @@ class PendingRun
                 throw $exception;
             }
 
-            return $run->ticket();
+            return $this->reuse($run)->ticket();
         }
 
         try {
@@ -386,9 +409,36 @@ class PendingRun
             return Run::query()->unfinished()->where('unique_key', $unique)->first();
         }
 
-        return Run::query()->unfinished()->named($this->name)
+        $query = Run::query()->unfinished()->named($this->name)
             ->where('subject_type', $this->subject?->getMorphClass())
-            ->where('subject_id', $this->subject?->getKey())->first();
+            ->where('subject_id', $this->subject?->getKey());
+
+        if (! $this->isShared) {
+            [$type, $id] = $this->initiatorIdentity();
+            $query->where('initiator_type', $type)->where('initiator_id', $id);
+        }
+
+        return $query->first();
+    }
+
+    /** @return array{0: string|null, 1: string|null} */
+    private function initiatorIdentity(): array
+    {
+        $id = $this->initiator?->getAuthIdentifier();
+
+        return $this->initiator instanceof Model && (is_string($id) || is_int($id))
+            ? [$this->initiator->getMorphClass(), (string) $id]
+            : [null, null];
+    }
+
+    /** A shared run is handed over only to someone its `view` policy admits; anyone else gets an AuthorizationException. */
+    private function reuse(Run $run): Run
+    {
+        if ($this->isShared && Gate::forUser($this->initiator)->denies('view', $run)) {
+            throw new AuthorizationException('This run belongs to someone else.');
+        }
+
+        return $run;
     }
 
     private function declaredTotal(): ?int

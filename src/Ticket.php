@@ -2,6 +2,7 @@
 
 namespace Tey\Docket;
 
+use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Support\Arrayable;
 use Illuminate\Contracts\Support\Responsable;
 use Illuminate\Http\JsonResponse;
@@ -57,7 +58,8 @@ class Ticket implements Arrayable, JsonSerializable, Responsable
     /**
      * The run's full snapshot (the same JSON as its `poll` link, including `steps`, `checklist`, `failure` and `links.stream`),
      * for a page or modal prop: the first paint needs no fetch, and `useDocketRun()` follows it from there. Links reflect the
-     * signed-in user's abilities, as the poll link's do.
+     * signed-in user's abilities, as the poll link's do. Throws `AuthorizationException` when the signed-in user may not `view` the run,
+     * so a prop never carries someone else's run.
      *
      * @return array<string, mixed>
      *
@@ -65,7 +67,13 @@ class Ticket implements Arrayable, JsonSerializable, Responsable
      */
     public function snapshot(): array
     {
-        return $this->run()->toArray();
+        $run = $this->run();
+
+        if (Gate::denies('view', $run)) {
+            throw new AuthorizationException('The current user may not view this run.');
+        }
+
+        return $run->toArray();
     }
 
     /** @return array{schema_version: int, id: string, token: string, name: string, status: string, revision: int, poll_after_ms: int|null, links: array<string, string>} */

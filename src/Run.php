@@ -464,7 +464,7 @@ class Run extends Model
      */
     public function outputPath(string $name, string $directory = 'docket'): string
     {
-        $name = trim(str_replace(['/', '\\', "\0"], '-', $name));
+        $name = ltrim(trim(str_replace(['/', '\\', "\0"], '-', $name)), '.');
 
         return trim($directory, '/').'/'.$this->id.'/'.($name === '' ? 'output' : $name);
     }
