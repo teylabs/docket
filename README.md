@@ -1064,7 +1064,7 @@ const { run, unavailable, retry } = useDocketRun(() => props.run)
 `<DocketProgress>` and `<DocketRunModal>` take `variant`:
 
 - `bar` (the default): the current step, a progress bar, counts and Retry, as before.
-- `stepper`: every declared step in order. Pending steps are marked `data-status="pending"` (style them muted), the active step shows a spinner, a done step a check, and a failed step its error inline. A last step holds the `actions` slot, given `enabled` (the run succeeded) and `finished`; in `<DocketRunModal>` it holds Download and View, disabled until the run succeeds.
+- `stepper`: every declared step in order (after a failure, only the steps up to the failed one, without the actions step; the failed step shows `failures[code]`, else the server's reason; Retry is left to the host unless `:retry="true"`). Pending steps are marked `data-status="pending"` (style them muted), the active step shows a spinner, a done step a check, and a failed step its error inline. A last step holds the `actions` slot, given `enabled` (the run succeeded) and `finished`; in `<DocketRunModal>` it holds Download and View, disabled until the run succeeds.
 - `minimal`: a spinner and the current step's label.
 
 ```vue

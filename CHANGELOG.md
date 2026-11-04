@@ -4,6 +4,12 @@
 
 ## [0.6.4] - 2026-11-04
 
+### Fixed
+
+- The `stepper` variant of `<DocketProgress>` no longer adds its own "Try again" button beside the host's actions. `retry` now defaults to off for `stepper` and on for `bar` and `minimal`, as before; pass `:retry="true"` to keep it. (#61)
+- After a failure, the stepper lists only the steps up to the failed one and drops the actions step, instead of showing later steps as pending next to disabled success actions. (#61)
+- A failed step no longer shows its raw error code. It shows `failures[code]` (a new prop, like `steps`), else the server's checklist reason, else a generic message. (#61)
+
 ### Added
 
 - Run in a modal: the host's controller starts or reuses the run and hands the dialog its snapshot, in one request.

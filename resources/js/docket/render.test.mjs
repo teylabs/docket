@@ -68,7 +68,8 @@ test('stepper lists every step: done with a check, active with a spinner, pendin
 test('stepper shows a failed step with its error inline, and enables the actions once the run succeeds', async () => {
     const failed = await render(DocketProgress, { run: run({ status: 'failed', steps: [{ key: 'prepare', label: 'Preparing data', status: 'done' }, { key: 'render', label: 'Rendering PDF', status: 'failed', error: 'report.render_failed' }, { key: 'save', label: 'Saving', status: 'pending' }] }), variant: 'stepper' });
     assert.equal(attr(failed, 'Rendering PDF'), 'failed');
-    assert.match(failed, /data-docket-cross[\s\S]*Rendering PDF[\s\S]*data-docket-step-error role="alert">report.render_failed/);
+    assert.match(failed, /data-docket-cross[\s\S]*Rendering PDF[\s\S]*data-docket-step-error role="alert">Something went wrong\./);
+    assert.doesNotMatch(failed, /report\.render_failed/);
     assert.doesNotMatch(failed, /data-docket-spinner/);
 
     const done = await render(DocketProgress, { run: run({ status: 'succeeded', steps: run().steps.map(step => ({ ...step, status: 'done' })) }), variant: 'stepper' }, { actions: ({ enabled }) => h('button', { disabled: !enabled }, 'View') });
@@ -201,4 +202,31 @@ test('a done run enables the steps slot and offers Download and View through the
 
     const settling = await render(DocketRunDialog, { run: { ...done, settling: true } });
     assert.doesNotMatch(settling, /data-docket-download/);
+});
+
+const failedRun = (extra = {}) => run({ status: 'failed', links: { retry: '/r' }, steps: [{ key: 'prepare', label: 'Preparing data', status: 'done' }, { key: 'render', label: 'Rendering PDF', status: 'failed', error: 'report.render_failed' }, { key: 'save', label: 'Saving', status: 'pending' }], ...extra });
+
+test('the stepper leaves Retry to the host by default, and shows it when asked; the bar keeps it', async () => {
+    assert.doesNotMatch(await render(DocketProgress, { run: failedRun(), variant: 'stepper' }), /data-docket-retry/);
+    assert.match(await render(DocketProgress, { run: failedRun(), variant: 'stepper', retry: true }), /data-docket-retry/);
+    assert.match(await render(DocketProgress, { run: failedRun() }), /<button type="button" data-docket-retry>Try again<\/button>/);
+});
+
+test('after a failure the stepper lists only the steps up to the failed one, without the actions step', async () => {
+    const html = await render(DocketProgress, { run: failedRun(), variant: 'stepper' }, { actions: () => h('button', 'View') });
+    assert.equal((html.match(/<li data-docket-step/g) ?? []).length, 2);
+    assert.doesNotMatch(html, /Saving|data-docket-step-final|>View</);
+
+    const running = await render(DocketProgress, { run: run(), variant: 'stepper' }, { actions: () => h('button', 'View') });
+    assert.match(running, /Saving[\s\S]*data-docket-step-final/);
+});
+
+test('a failed step shows the failures label for its code, else the server\'s reason, never the code', async () => {
+    const mapped = await render(DocketProgress, { run: failedRun(), variant: 'stepper', failures: { 'report.render_failed': 'The PDF could not be drawn.' } });
+    assert.match(mapped, /data-docket-step-error role="alert">The PDF could not be drawn\.</);
+
+    const checklist = [{ key: 'prepare', label: 'Preparing data', state: 'done', detail: null, reason: null, code: null, required: true, action: null }, { key: 'render', label: 'Rendering PDF', state: 'failed', detail: null, reason: 'The renderer timed out.', code: 'report.render_failed', required: true, action: null }];
+    const server = await render(DocketProgress, { run: failedRun({ checklist }), variant: 'stepper' });
+    assert.match(server, /data-docket-step-error role="alert">The renderer timed out\.</);
+    assert.doesNotMatch(server, /report\.render_failed/);
 });
