@@ -1,0 +1,43 @@
+{
+    "schema_version": 1,
+    "runs": [
+        {
+            "id": "01JRUNSLOW0000000000000001", "token": "a1", "name": "report.build", "label": "Monthly report", "status": "running",
+            "state": "slow", "active": true, "tone": "warning", "message": "Taking longer than usual", "reason": null,
+            "step": { "key": "render", "label": "Rendering PDF" },
+            "steps": [
+                { "key": "prepare", "label": "Preparing data", "status": "done" },
+                { "key": "render", "label": "Rendering PDF", "status": "active" }
+            ],
+            "progress": { "done": 1, "total": null, "percent": null },
+            "started_at": "2026-11-05T10:00:00Z", "finished_at": null, "slow_at": "2026-11-05T10:02:00Z", "timeout_at": "2026-11-05T11:00:00Z",
+            "linger_until": null, "links": {}
+        },
+        {
+            "id": "01JRUNTIMEDOUT000000000002", "token": "a2", "name": "report.build", "label": "Monthly report", "status": "running",
+            "state": "timed_out", "active": true, "tone": "danger", "message": "Timed out",
+            "reason": "This is taking much longer than expected. It may have stopped.", "step": null, "steps": [],
+            "progress": { "done": 0, "total": null, "percent": null },
+            "started_at": "2026-11-05T08:00:00Z", "finished_at": null, "slow_at": "2026-11-05T08:02:00Z", "timeout_at": "2026-11-05T09:00:00Z",
+            "linger_until": null, "links": { "help": { "url": "https://example.test/help", "label": "Get help" } }
+        },
+        {
+            "id": "01JRUNFAILED00000000000003", "token": "a3", "name": "report.build", "label": "Monthly report", "status": "failed",
+            "state": "failed", "active": false, "tone": "danger", "message": "Something went wrong", "reason": "It stopped responding.",
+            "step": null, "steps": [], "progress": { "done": 0, "total": null, "percent": null },
+            "started_at": "2026-11-05T10:00:00Z", "finished_at": "2026-11-05T10:05:00Z", "slow_at": "2026-11-05T10:02:00Z", "timeout_at": "2026-11-05T11:00:00Z",
+            "linger_until": "2026-11-05T10:15:00Z", "links": {}
+        },
+        {
+            "id": "01JRUNDONE0000000000000004", "token": "a4", "name": "report.build", "label": "Monthly report", "status": "succeeded",
+            "state": "succeeded", "active": false, "tone": "success", "message": "Done", "reason": null,
+            "step": null, "steps": [], "progress": { "done": 3, "total": 3, "percent": 100 },
+            "started_at": "2026-11-05T10:00:00Z", "finished_at": "2026-11-05T10:01:00Z", "slow_at": "2026-11-05T10:02:00Z", "timeout_at": "2026-11-05T11:00:00Z",
+            "linger_until": "2026-11-05T10:01:30Z", "links": { "output": { "url": "/docket/runs/a4/output/view?expires=1&signature=s", "label": "Open" } }
+        }
+    ],
+    "active": true,
+    "empty": "Nothing running.",
+    "poll_after_ms": 2000,
+    "generated_at": "2026-11-05T10:01:00Z"
+}

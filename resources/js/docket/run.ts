@@ -144,25 +144,30 @@ export type DocketMode = 'streamed' | 'polling';
 /** The run's event stream, next to its `poll` link; null when the run has no routes. */
 export const streamUrl = (run: Pick<DocketRun, 'links'>): string | null => (run.links.poll ? `${run.links.poll}/stream` : null);
 
-type EventSourceLike = {
+export type EventSourceLike = {
     addEventListener(type: string, listener: (event: { data: string }) => void): void;
     onerror: ((event: unknown) => void) | null;
     close(): void;
 };
 
+/** The browser's EventSource, or a stand-in with the same surface (tests). */
+export type EventSourceConstructor = new (url: string, init?: { withCredentials?: boolean }) => EventSourceLike;
+
+const defaultSource = (): EventSourceConstructor | undefined => (globalThis as { EventSource?: EventSourceConstructor }).EventSource;
+
 /**
- * Listens to a run's event stream. Each `snapshot` event goes to `snapshot`. The server ends a stream with an `end` event:
- * `finished` closes it, `timeout` reconnects at once, and `unavailable`, any connection error or a garbled event closes it
- * for good and calls `fallback` once, so the caller can poll instead. Returns a function that closes the stream, or null
- * when streaming isn't possible (no EventSource, or no routes), in which case the caller should poll.
+ * Listens to a Docket event stream at `url`. Each `event` event's JSON goes to `message`. The server ends a stream with an `end`
+ * event: `finished` closes it, `timeout` reconnects at once, and `unavailable`, any connection error or a garbled event closes it
+ * for good and calls `fallback` once, so the caller can poll instead. Returns a function that closes the stream, or null when
+ * streaming isn't possible (no EventSource), in which case the caller should poll. Runs and run lists share this transport.
  */
-export function openStream(
-    run: Pick<DocketRun, 'links'>,
-    handlers: { snapshot: (run: DocketRun) => void; fallback: () => void },
-    Source: (new (url: string, init?: { withCredentials?: boolean }) => EventSourceLike) | undefined = (globalThis as { EventSource?: new (url: string) => EventSourceLike }).EventSource,
+export function openEventStream<T>(
+    url: string,
+    event: string,
+    handlers: { message: (payload: T) => void; fallback: () => void },
+    Source: EventSourceConstructor | undefined = defaultSource(),
 ): (() => void) | null {
-    const url = streamUrl(run);
-    if (!url || typeof Source !== 'function') return null;
+    if (typeof Source !== 'function') return null;
     let source: EventSourceLike | null = null;
     let closed = false;
 
@@ -178,17 +183,17 @@ export function openStream(
     const connect = () => {
         const current = new Source(url, { withCredentials: true });
         source = current;
-        current.addEventListener('snapshot', event => {
+        current.addEventListener(event, message => {
             try {
-                handlers.snapshot(JSON.parse(event.data) as DocketRun);
+                handlers.message(JSON.parse(message.data) as T);
             } catch {
                 fail();
             }
         });
-        current.addEventListener('end', event => {
+        current.addEventListener('end', message => {
             let reason: unknown = null;
             try {
-                reason = (JSON.parse(event.data) as { reason?: unknown }).reason;
+                reason = (JSON.parse(message.data) as { reason?: unknown }).reason;
             } catch {
                 // An unreadable end is treated as unavailable.
             }
@@ -208,6 +213,21 @@ export function openStream(
     connect();
 
     return close;
+}
+
+/**
+ * Listens to a run's event stream: each `snapshot` event goes to `snapshot`, with the reconnect and fallback rules of
+ * `openEventStream`. Returns null when streaming isn't possible (no EventSource, or no routes); the caller should poll.
+ */
+export function openStream(
+    run: Pick<DocketRun, 'links'>,
+    handlers: { snapshot: (run: DocketRun) => void; fallback: () => void },
+    Source: EventSourceConstructor | undefined = defaultSource(),
+): (() => void) | null {
+    const url = streamUrl(run);
+    if (!url) return null;
+
+    return openEventStream<DocketRun>(url, 'snapshot', { message: handlers.snapshot, fallback: handlers.fallback }, Source);
 }
 
 /** The run's declared steps, each label replaced by the caller's own for that key when given. Empty when the work declared none. */

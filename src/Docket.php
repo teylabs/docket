@@ -20,6 +20,12 @@ class Docket
         return app(CurrentRun::class)->current();
     }
 
+    /** The runs-in-progress list: its rows, payload and the app's `scopeUsing()` and `describeUsing()` hooks. */
+    public function runs(): Listing\RunList
+    {
+        return app(Listing\RunList::class);
+    }
+
     public function find(string $token): ?Run
     {
         return Run::where('token', $token)->first();

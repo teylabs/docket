@@ -1025,7 +1025,7 @@ Publish the components into your app, then import them from `@/docket`:
 
 ```bash
 php artisan vendor:publish --tag=docket-vue
-# -> resources/js/docket: useDocketRun, DocketProgress, DocketRunModal
+# -> resources/js/docket: useDocketRun, useDocketRuns, DocketProgress, DocketRunModal, DocketRunsList, DocketRunsWidget
 ```
 
 ```vue
@@ -1093,6 +1093,34 @@ $run->output($path, disk: 'local', name: 'Report.pdf', mime: 'application/pdf');
 Docket keeps a reference to the file, never a copy; your application owns its lifetime. The snapshot shows the output's name, type and size, and `links.download` and `links.view` are signed for `docket.output_link_ttl` seconds and also checked by the run's `view` policy. Download is always an attachment; View opens inline only for PDFs, images and plain text, and downloads anything else. An inline image or text file is also served with `Content-Security-Policy: sandbox` (browsers refuse to show a sandboxed PDF, so PDFs go without it). The links are signed as relative paths, so a proxy or a second host name doesn't invalidate them. A browser that opens an expired or invalid link gets a plain "This link has expired" page (403) with a link back to `docket.expired_link.url` (default `/`, label `docket.expired_link.label`); publish `--tag=docket-views` to restyle it. JSON requests keep the JSON error.
 
 When the run succeeds, `<DocketRunModal>` shows Download and View and starts the download at once (once per run on the page, even if the dialog opens again) by submitting a hidden GET form to `links.download`, aimed at a hidden frame. The browser saves the file while the page and dialog stay put, no popup blocker is involved, and an error answer lands in the frame instead of over the page. A later click on Download reads the run again first, so the link is freshly signed; if the file is gone, the dialog says so. Pass `:auto-download="false"` to wait for a click, `:download="url => yourForm.submit(url, { target: ensureDownloadFrame() })"` to reuse your own form component (always aim it at `ensureDownloadFrame()`: a form aimed at a missing frame opens a window, which the popup blocker stops), or the `complete` slot to replace the buttons.
+
+### Runs in Progress
+
+List the runs of one type that are active or just finished, for example on a dashboard, with `<DocketRunsWidget>`:
+
+```vue
+<DocketRunsWidget :filter="{ name: 'report.build', subjectType: 'workspace', subjectId: workspace.id }" title="Reports in progress" :linger="30" mode="streamed" />
+```
+
+The server decides everything the widget shows. `GET /docket/runs?name=…` (route `docket.runs`) returns display-ready rows, and the widget renders them as given: no permission checks, thresholds or copy in the browser. Each row carries a `label`, the current `step`, a `state` (`queued`, `running`, `slow`, `timed_out`, `succeeded`, `partial`, `failed` or `cancelled`), a `tone`, the `message` to show, a failure or timeout `reason`, and `links.output` (the run's file, signed like the snapshot's links) and `links.help`. The full shape is in [the JSON contract](docs/json.md#runs-in-progress-get-docketruns).
+
+- **Who sees what:** every row passes the run's `view` policy, the same check as the snapshot, so the default lists only the viewer's own runs and `SubjectRunPolicy` lists the runs about subjects they may view. To narrow the candidate query first (a tenant column, say), register a scope; it never replaces the `view` check:
+
+  ```php
+  // app/Providers/AppServiceProvider.php, boot()
+  use Tey\Docket\Facades\Docket;
+
+  Docket::runs()->scopeUsing(fn ($query, $user) => $query->where('subject_type', 'workspace')->whereIn('subject_id', $user->workspaceIds()));
+  Docket::runs()->describeUsing(fn (array $row, $run) => [...$row, 'label' => __('runs.'.$run->name)]);
+  ```
+
+  `describeUsing()` adjusts a row (its label, reason or links) after Docket builds it. Labels can also come from `docket.runs.labels` (run name to label) and failure reasons from `docket.runs.reasons` (error code to text); every other piece of copy is in `docket.runs.copy`.
+- **Stuck runs never vanish:** an active run past `docket.runs.slow_after` seconds is `slow` ("Taking longer than usual"); past its timeout it is `timed_out`, with a reason and, when `docket.runs.help_url` is set, a help link. The timeout is `docket.runs.timeout_after`, or by default the run's own stale interval (`staleAfter()`, the job's `$timeout` or `docket.stale_after`), the same one after which `docket:prune --stale` fails it as `run.stalled`. A timed-out row stays until the run finishes.
+- **Finished rows linger,** then drop off: a run that succeeded stays for `linger` seconds (the widget prop, else `docket.runs.linger_seconds`, capped at `docket.runs.max_linger_seconds`); one that failed, finished partial or was cancelled stays for at least `docket.runs.failed_linger_seconds`. Each finished row carries `linger_until`, read on the server's clock.
+- **Bounded:** at most `limit` rows (`docket.runs.limit`, at most `docket.runs.max_limit`), active runs first, after reading at most `docket.runs.scan` candidates. A migration adds the indexes the list reads.
+- **Live:** the list is polled at the server's `poll_after_ms`, fast (`docket.poll_after_ms`) while any row is active and slow (`docket.runs.idle_poll_ms`) while idle, and paused while the tab is hidden. With `mode="streamed"`, `GET /docket/runs/stream` (route `docket.runs.stream`) pushes the list whenever a row changes, over the same transport as a run's stream, falling back to polling on any stream error.
+
+Widget props: `filter` (`{ name, subjectType?, subjectId?, limit? }`), `title`, `hideWhenEmpty` (default `true`; otherwise it shows the server's `empty` copy), `linger` (seconds), `mode` (`polling` or `streamed`) and `prefix` (when `docket.routes.prefix` isn't `docket`). Pass a `row` slot to replace a row's markup. To restyle completely, use the headless parts: `useDocketRuns(filter, { mode })` returns `rows` (the server's descriptors, minus rows past their linger), the raw `list`, and `connection` (`streaming`, `polling`, `paused` or `unavailable`); `<DocketRunsList :rows>` renders rows without any transport. The markup is unstyled: style the `data-docket-run` hooks, with `data-state` and `data-tone` on each row.
 
 ### React
 
@@ -1344,6 +1372,14 @@ php artisan vendor:publish --tag=docket-config
 | `routes.prefix` | `docket` | Their URL prefix. |
 | `routes.middleware` | `['web']` | Their middleware, for example `['api', 'auth:sanctum']`. |
 | `connection` | `null` | The database connection Docket writes runs on. `null` opens a separate connection to your default database, so records survive your transactions' rollbacks. |
+| `runs.slow_after` | `120` | Seconds after which an active run in the runs list shows as `slow` ("Taking longer than usual"). `null` turns it off. |
+| `runs.timeout_after` | `null` | Seconds after which an active run in the list shows as `timed_out`. `null` uses the run's own stale interval. |
+| `runs.linger_seconds`, `runs.max_linger_seconds` | `30`, `3600` | How long a succeeded run stays in the list, and the most a client may ask for. |
+| `runs.failed_linger_seconds` | `600` | How long a failed, partial or cancelled run stays in the list, at least. |
+| `runs.limit`, `runs.max_limit`, `runs.scan` | `10`, `50`, `200` | Rows per list by default, the most a client may ask for, and the most candidates one list reads. |
+| `runs.idle_poll_ms` | `15000` | The poll interval the list suggests while no row is active. |
+| `runs.help_url` | `null` | A help link on timed-out and failed rows. |
+| `runs.labels`, `runs.reasons`, `runs.copy` | | Row labels by run name, failure reasons by error code, and every other piece of list copy. |
 | `max_depth` | `10` | How deep runs may nest; a deeper `Docket::run()` or nested dispatch throws `run.depth_exceeded`. `null` turns the cap off. Use `->linkedTo()` to start fresh. |
 
 Partial `routes` overrides keep unspecified defaults. A supplied `middleware` list replaces the default list, including `[]`. With `routes.enabled = false`, tickets and snapshots keep `links` as an empty array (`[]` in JSON), without reading `routes.prefix` or `routes.middleware`. Ticket responses omit `Location`; their status, poll interval and other fields are unchanged. Register and authorize your own endpoints if clients need HTTP access.
