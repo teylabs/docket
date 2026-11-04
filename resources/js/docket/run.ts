@@ -19,6 +19,8 @@ export type DocketChecklistItem = {
     state: 'pending' | 'active' | 'done' | 'failed' | 'skipped';
     detail: string | null;
     reason: string | null;
+    /** The error code behind a failed step, for logs and support; not for display. Since 0.6.1. */
+    code?: string | null;
     required: boolean;
     action: { label: string; url?: string | null; name?: string | null } | null;
 };
@@ -266,5 +268,5 @@ export function currentStepLabel(run: DocketRun | null | undefined, labels: Reco
 export function checklistItems(run: DocketRun | null | undefined): DocketChecklistItem[] {
     if (run?.checklist) return run.checklist;
 
-    return (run?.steps ?? []).map(step => ({ key: step.key, label: step.label, state: step.status, detail: null, reason: step.error ?? null, required: true, action: null }));
+    return (run?.steps ?? []).map(step => ({ key: step.key, label: step.label, state: step.status, detail: null, reason: step.error ? 'Something went wrong.' : null, code: step.error ?? null, required: true, action: null }));
 }

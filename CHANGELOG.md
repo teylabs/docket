@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+## [0.6.1] - 2026-11-04
+
+### Security
+
+- `$run->outputLink()` accepted protocol-relative (`//other.host/…`) and backslash (`/\other.host`) links, which browsers open on another host. It now accepts only an absolute `http(s)://` URL with a host and no user info, or a path on this host (`/` not followed by `/` or `\`), and rejects whitespace, control characters and backslashes. (#58)
+- Event streams ran their checks after the request's middleware had restored its context, so a tenant or other ambient state set there was gone when the runs list's `scopeUsing()` scope and the `view` policy ran. `Docket::runs()->streamContextUsing(fn (Closure $next, Request $request) => …)` now wraps each tick of both the runs-list stream and a run's stream, so the host can re-enter its context. Scopes and custom policies should read the `$viewer` and filter they are given rather than ambient state. (#58)
+
+### Fixed
+
+- An unmapped failure no longer shows its raw error code to people: list rows and checklist items fall back to `docket.runs.copy.reason` ("Something went wrong."), and carry the code in a separate `code` field for logs and support. (#58)
+
+## [0.6.0] - 2026-11-04
+
 ### Fixed
 
 - A run no longer shows every step done before its result is there. The status was committed before `then()` callbacks and `RunFinished` listeners ran, and those often record the output, so a stepper could show all checks with Download and View still unavailable. A finished run is now `settling` until they finish (at most `docket.settle_seconds`, 30): the snapshot gains `settling`, keeps `poll_after_ms`, and keeps the last step `active`; streams stay open, and `finished()` and `succeeded()` in the Vue helpers wait for it. The runs list shows it as `finishing` ("Finishing…"). (#56)

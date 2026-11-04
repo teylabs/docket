@@ -6,6 +6,7 @@ use Closure;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Builder;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Http\Request;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\URL;
@@ -19,7 +20,9 @@ use Tey\Docket\RunStatus;
  * row drops off. A client renders the rows as given.
  *
  * Bind your own hooks in a service provider: `scopeUsing()` narrows the candidate query (a tenant or owner column), and
- * `describeUsing()` adjusts a row (its label, reason or links). Neither replaces the `view` check.
+ * `describeUsing()` adjusts a row (its label, reason or links). Neither replaces the `view` check. Both run inside event
+ * streams too, after the request's middleware has finished: read the `$viewer` and filter they are given, never ambient state,
+ * or re-enter that state with `streamContextUsing()`.
  *
  * @api
  *
@@ -41,6 +44,39 @@ class RunList
 
     /** @var (Closure(array<string, mixed>, Run): array<string, mixed>)|null */
     private ?Closure $describe = null;
+
+    /** @var (Closure(Closure(): mixed, Request): mixed)|null */
+    private ?Closure $streamContext = null;
+
+    /**
+     * Wraps each tick of an event stream (the runs list's and a run's). A stream's body runs after the middleware has returned
+     * and restored its context, so a tenant or other ambient state set there is gone. Re-enter it here from the request, e.g.
+     * `fn (Closure $next, Request $request) => Tenant::forRequest($request)->execute($next)`, and return `$next()`'s value.
+     *
+     * @param  Closure(Closure(): mixed, Request): mixed  $wrap
+     */
+    public function streamContextUsing(Closure $wrap): static
+    {
+        $this->streamContext = $wrap;
+
+        return $this;
+    }
+
+    /**
+     * Runs one stream tick inside the host's stream context, or as is without one.
+     *
+     * @template T
+     *
+     * @param  Closure(): T  $tick
+     * @return T
+     *
+     * @internal
+     */
+    public function inStreamContext(Request $request, Closure $tick): mixed
+    {
+        /** @var T */
+        return $this->streamContext === null ? $tick() : ($this->streamContext)($tick, $request);
+    }
 
     /**
      * Narrows the candidate query before the `view` check, e.g. to the current tenant. Rows still pass the policy one by one.
@@ -211,6 +247,7 @@ class RunList
             },
             'message' => $this->copy($state),
             'reason' => $reason,
+            'code' => in_array($run->status, [RunStatus::Failed, RunStatus::Partial], true) ? $this->failureCode($run) : null,
             'step' => $current,
             'steps' => $steps,
             'progress' => $run->progress->toArray(),
@@ -246,7 +283,7 @@ class RunList
             return $reasons[$code];
         }
 
-        return $this->copy($run->status->value);
+        return $this->copy('reason');
     }
 
     /**

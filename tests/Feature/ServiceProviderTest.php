@@ -30,7 +30,7 @@ it('boots the provider and merges the schema and snapshot config', function () {
                 'copy' => [
                     'queued' => 'Waiting to start…', 'running' => 'Working…', 'slow' => 'Taking longer than usual', 'timed_out' => 'Timed out', 'finishing' => 'Finishing…',
                     'succeeded' => 'Done', 'partial' => 'Finished with some problems', 'failed' => 'Something went wrong', 'cancelled' => 'Cancelled',
-                    'timed_out_reason' => 'This is taking much longer than expected. It may have stopped.', 'empty' => 'Nothing running.',
+                    'reason' => 'Something went wrong.', 'timed_out_reason' => 'This is taking much longer than expected. It may have stopped.', 'empty' => 'Nothing running.',
                     'output' => 'Open', 'help' => 'Get help',
                 ],
             ],
