@@ -94,7 +94,7 @@ it('queues a native job and records its final status on a real worker', function
     expect(DB::table('work_results')->pluck('label')->all())->toBe(['first'])
         ->and($ticket->status)->toBe(RunStatus::Queued)
         ->and($ticket->run()->status)->toBe(RunStatus::Succeeded)
-        ->and($ticket->run()->revision)->toBe(3)
+        ->and($ticket->run()->revision)->toBe(4) // running, succeeded, then settled once the completion listeners ran
         ->and($ticket->run()->finished_at)->not->toBeNull()
         ->and($ticket->run()->expires_at)->toEqual($ticket->run()->finished_at->addDay())
         ->and($events)->toHaveCount(2)
