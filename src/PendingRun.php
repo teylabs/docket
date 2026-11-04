@@ -32,6 +32,8 @@ class PendingRun
 
     private bool $isDetached = false;
 
+    private bool $isRequired = false;
+
     private ?string $linkedFrom = null;
 
     private bool $repeatsAllowed = false;
@@ -182,6 +184,20 @@ class PendingRun
         return $this;
     }
 
+    /**
+     * Makes this child run required by its parent: if it fails, the parent fails too, with this child's error code and params
+     * (plus `child`, the trail back to it). A child that isn't required (the default) leaves the parent to finish `partial`,
+     * listing it under `failed_children`. Has no effect on a run without a parent, or a detached one.
+     *
+     * @api
+     */
+    public function required(bool $required = true): static
+    {
+        $this->isRequired = $required;
+
+        return $this;
+    }
+
     public function dispatchSync(): Ticket
     {
         return $this->start(true);
@@ -266,6 +282,7 @@ class PendingRun
                     'total_explicit' => $this->units !== null,
                     'dispatch_sync' => $callback === null && $sync,
                     'detached' => $this->isDetached,
+                    'required' => $this->isRequired,
                     'stale_after' => $this->staleSeconds ?? ($this->source === 'job' ? ($this->jobs[0]->timeout ?? null) : null) ?? config('docket.stale_after'),
                     'expires_at' => $this->expiry,
                     'unique_key' => $unique,

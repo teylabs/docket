@@ -40,6 +40,8 @@ export type DocketRun = {
     output?: { name: string; mime: string; size: number } | null;
     /** The steps as checklist items, ready for a server-driven checklist component (kit's `<Checklist :items>`). Since 0.6. */
     checklist?: DocketChecklistItem[];
+    /** Direct children that failed, with their reasons (0.6.2). */
+    failed_children?: Array<{ id: string; name: string; label: string; required: boolean; code: string | null; reason: string }>;
     /** The run has its final status, but its completion callbacks (which often record the output) are still running. Keep reading. */
     settling?: boolean;
     poll_after_ms: number | null;

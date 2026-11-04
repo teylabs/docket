@@ -2,6 +2,11 @@
 
 ## Unreleased
 
+### Added
+
+- The parent decides what a child failure means. `->required()` on a child run (`Docket::required()->run(...)`, `Docket::job($job)->required()->dispatch()`) makes its failure the parent's: the parent fails with the child's error code and params, plus `child`, the trail back to it, through any number of required levels. A child that isn't required (the default, unchanged) leaves the parent to finish `partial`. Publish and run the new migration (a `required` column). (#59)
+- Snapshots and runs-list rows gain `failed_children`: the direct children that failed, each with its `label`, `required`, `code` and the `reason` to show (from `docket.runs.reasons`, else `docket.runs.copy.reason`), at most 20 and only those the viewer may view. The `checklist` adds each failed optional child as a `skipped`, `required: false` item with its reason, so a checklist reads "done with problems" rather than blocked; a required child's failure already shows on the failed step. `<DocketRunsList>` lists the failed children. (#59)
+
 ## [0.6.1] - 2026-11-04
 
 ### Security

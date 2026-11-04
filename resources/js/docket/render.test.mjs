@@ -156,3 +156,10 @@ test('the stepper hands the server\'s checklist items to a steps slot, so an app
     assert.match(html, /data-host-checklist[\s\S]*data-state="failed">Rendering PDF The renderer timed out./);
     assert.doesNotMatch(html, /data-docket-steps/);
 });
+
+test('a partial row lists its failed children with the server\'s reasons', async () => {
+    const row = { ...runsList.runs[3], state: 'partial', status: 'partial', message: 'Finished with some problems', failed_children: [{ id: 'c1', name: 'reading', label: 'Reading the message', required: false, code: 'mail.unreadable', reason: 'The message could not be read.' }] };
+    const html = await render(DocketRunsList, { rows: [row] });
+    assert.match(html, /data-docket-run-failed-child data-required="false"><span data-docket-run-failed-child-label>Reading the message<\/span> <span data-docket-run-failed-child-reason>The message could not be read.<\/span>/);
+    assert.doesNotMatch(html, /mail\.unreadable/);
+});

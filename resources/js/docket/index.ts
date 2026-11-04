@@ -6,4 +6,4 @@ export { useDocketRun, type DocketRunOptions, type DocketRunState } from './useD
 export { useDocketRuns, type DocketRunsOptions, type DocketRunsState } from './useDocketRuns';
 export { checklistItems, type DocketChecklistItem } from './run';
 export { claimAutoDownload, currentStepLabel, stepList, DOWNLOAD_FRAME, ensureDownloadFrame, freshDownloadLink, finished, isTicket, formFields, nextDelay, openEventStream, openStream, percent, streamUrl, submitDownload, succeeded, type DocketMode, type DocketStep, type DocketStepStatus, type DocketVariant, type DocketRun, type DocketStatus, type EventSourceConstructor, type EventSourceLike } from './run';
-export { clockSkew, nextListDelay, runsUrl, visibleRows, type DocketRowLink, type DocketRunFilter, type DocketRunList, type DocketRunRow, type DocketRunRowState } from './runs';
+export { clockSkew, nextListDelay, runsUrl, visibleRows, type DocketFailedChild, type DocketRowLink, type DocketRunFilter, type DocketRunList, type DocketRunRow, type DocketRunRowState } from './runs';

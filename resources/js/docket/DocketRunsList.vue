@@ -27,6 +27,11 @@ withDefaults(defineProps<{
                     <span v-if="row.step" data-docket-run-step>{{ row.step.label }}</span>
                     <span data-docket-run-message>{{ row.message }}</span>
                     <span v-if="row.reason" data-docket-run-reason>{{ row.reason }}</span>
+                    <ul v-if="row.failed_children?.length" data-docket-run-failed-children>
+                        <li v-for="child in row.failed_children" :key="child.id" data-docket-run-failed-child :data-required="child.required ? 'true' : 'false'">
+                            <span data-docket-run-failed-child-label>{{ child.label }}</span> <span data-docket-run-failed-child-reason>{{ child.reason }}</span>
+                        </li>
+                    </ul>
                     <a v-if="row.links.output" :href="row.links.output.url" target="_blank" rel="noopener" data-docket-run-output>{{ row.links.output.label }}</a>
                     <a v-if="row.links.help" :href="row.links.help.url" target="_blank" rel="noopener" data-docket-run-help>{{ row.links.help.label }}</a>
                 </slot>

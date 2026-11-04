@@ -247,7 +247,8 @@ class RunList
             },
             'message' => $this->copy($state),
             'reason' => $reason,
-            'code' => in_array($run->status, [RunStatus::Failed, RunStatus::Partial], true) ? $this->failureCode($run) : null,
+            'code' => in_array($run->status, [RunStatus::Failed, RunStatus::Partial], true) ? $run->failureCode() : null,
+            'failed_children' => $run->failedChildren(),
             'step' => $current,
             'steps' => $steps,
             'progress' => $run->progress->toArray(),
@@ -276,14 +277,14 @@ class RunList
      */
     private function reason(Run $run): string
     {
-        $code = $this->failureCode($run);
+        $code = $run->failureCode();
         $reasons = config()->array('docket.runs.reasons', []);
 
         if (is_string($code) && is_string($reasons[$code] ?? null)) {
             return $reasons[$code];
         }
 
-        return $this->copy('reason');
+        return Run::reasonFor($code);
     }
 
     /**
@@ -317,22 +318,6 @@ class RunList
         }
 
         return $query;
-    }
-
-    private function failureCode(Run $run, int $depth = 0): ?string
-    {
-        $code = $run->error['code'] ?? null;
-
-        if ((is_string($code) && $code !== 'run.child_failed') || $depth >= 10) {
-            return is_string($code) ? $code : null;
-        }
-
-        $childId = $run->error['params']['child'] ?? null;
-        $child = is_string($childId)
-            ? Run::query()->find($childId)
-            : $run->children()->where('status', RunStatus::Failed)->latest('finished_at')->latest('id')->first();
-
-        return $child === null ? $code : ($this->failureCode($child, $depth + 1) ?? $code);
     }
 
     /** The configured copy for a key (`docket.runs.copy.*`), else the key itself. */
