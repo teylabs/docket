@@ -2,6 +2,17 @@
 
 ## Unreleased
 
+## [0.6.5] - 2026-11-04
+
+### Security
+
+- Start-or-reuse (`unique()`, `uniqueBy()`) matched on name and subject only, so one user could be handed another user's active run, and with no subject the run name alone crossed users and tenants. `snapshot()` as a modal prop then carried that run's state to the wrong user. The match now includes the initiator, so each user gets their own run. `->shared()` opts in to reusing someone else's run, and that reuse throws `AuthorizationException` for a viewer the run's `view` policy doesn't admit. `$ticket->snapshot()` and `Docket::snapshot()` throw `AuthorizationException` when the signed-in user may not view the run. (#62)
+- `$run->outputPath()` turned a name of `.` or `..` into the run's folder or its parent. Leading dots are now dropped, and an empty result becomes `output`. (#62)
+
+### Upgrade note
+
+- Reuse is per initiator by default. Work that several users should share (a report about a workspace, say) needs `->shared()` and a `view` policy, such as `SubjectRunPolicy`, that admits everyone it is reused for. A run started before the upgrade is still found by its name, subject and initiator, so an in-flight run keeps being reused by the user who started it. A shared run without `uniqueBy()` keeps the key earlier versions stored. A caller that hands `snapshot()` a run the user can't view now gets an exception instead of the state. (#62)
+
 ## [0.6.4] - 2026-11-04
 
 ### Fixed

@@ -1,15 +1,29 @@
 <?php
 
+use Illuminate\Auth\Access\AuthorizationException;
+use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Tey\Docket\Facades\Docket;
+use Tey\Docket\Policies\RunPolicy;
 use Tey\Docket\Run;
 use Tey\Docket\RunStatus;
 use Tey\Docket\Tests\Fixtures\ReadOnlyRunPolicy;
 use Tey\Docket\Tests\Fixtures\RecordWork;
+use Tey\Docket\Tests\Fixtures\User;
+use Tey\Docket\Tests\Fixtures\Workspace;
+
+use function Pest\Laravel\actingAs;
 
 beforeEach(function () {
+    foreach (['users', 'workspaces'] as $table) {
+        Schema::create($table, function (Blueprint $blueprint) {
+            $blueprint->id();
+            $blueprint->timestamps();
+        });
+    }
     config(['queue.default' => 'sync']);
     Gate::policy(Run::class, ReadOnlyRunPolicy::class);
 });
@@ -78,5 +92,71 @@ it('gives each run its own output path', function () {
 
     expect($first->outputPath('Report.pdf', 'reports/'))->toBe('reports/'.$first->id.'/Report.pdf')
         ->and($second->outputPath('Report.pdf', 'reports'))->not->toBe($first->outputPath('Report.pdf', 'reports'))
-        ->and($first->outputPath('../x/y.pdf'))->toBe('docket/'.$first->id.'/..-x-y.pdf');
+        ->and($first->outputPath('../x/y.pdf'))->toBe('docket/'.$first->id.'/-x-y.pdf');
+});
+
+it('never resolves an output path outside the run\'s own folder', function (string $name, string $expected) {
+    $run = Run::create(['name' => 'report']);
+
+    expect($run->outputPath($name, 'reports'))->toBe('reports/'.$run->id.'/'.$expected);
+})->with([
+    'dot' => ['.', 'output'],
+    'dot dot' => ['..', 'output'],
+    'dots and spaces' => [' ... ', 'output'],
+    'hidden file' => ['.env', 'env'],
+    'empty' => ['', 'output'],
+]);
+
+it('keeps start-or-reuse per user by default, on one subject and with no subject', function (?int $subjectId) {
+    config(['queue.default' => 'null']);
+    Gate::policy(Run::class, RunPolicy::class);
+    $subject = $subjectId === null ? null : new Workspace(['id' => $subjectId]);
+    $start = function (int $user) use ($subject) {
+        actingAs(new User(['id' => $user]));
+        $pending = Docket::job(new RecordWork)->name('report.preview')->uniqueBy('pdf');
+
+        return ($subject === null ? $pending : $pending->about($subject))->dispatch();
+    };
+
+    $alice = $start(1);
+    $bob = $start(2);
+    $aliceAgain = $start(1);
+
+    expect($bob->id)->not->toBe($alice->id)
+        ->and($aliceAgain->id)->toBe($alice->id)
+        ->and($bob->run()->initiator_id)->toBe('2');
+
+    // Plain unique() too, including a run left from before the upgrade under the old name-and-subject key.
+    actingAs(new User(['id' => 1]));
+    $plain = Docket::job(new RecordWork)->name('report.legacy')->unique()->dispatch();
+    actingAs(new User(['id' => 2]));
+    expect(Docket::job(new RecordWork)->name('report.legacy')->unique()->dispatch()->id)->not->toBe($plain->id);
+})->with(['one subject' => 7, 'no subject' => null]);
+
+it('shares a run only when asked, and only with viewers its policy admits', function () {
+    config(['queue.default' => 'null']);
+    $subject = new Workspace(['id' => 7]);
+    Gate::policy(Run::class, ReadOnlyRunPolicy::class);
+    actingAs(new User(['id' => 1]));
+    $alice = Docket::job(new RecordWork)->name('report.preview')->about($subject)->shared()->uniqueBy('pdf')->dispatch();
+    actingAs(new User(['id' => 2]));
+    $bob = Docket::job(new RecordWork)->name('report.preview')->about($subject)->shared()->uniqueBy('pdf')->dispatch();
+
+    expect($bob->id)->toBe($alice->id);
+
+    Gate::policy(Run::class, RunPolicy::class);
+    expect(fn () => Docket::job(new RecordWork)->name('report.preview')->about($subject)->shared()->uniqueBy('pdf')->dispatch())
+        ->toThrow(AuthorizationException::class);
+});
+
+it('refuses a snapshot prop for a run the signed-in user may not view', function () {
+    config(['queue.default' => 'null']);
+    Gate::policy(Run::class, RunPolicy::class);
+    actingAs(new User(['id' => 1]));
+    $ticket = Docket::job(new RecordWork)->name('report.preview')->unique()->dispatch();
+    expect($ticket->snapshot()['id'])->toBe($ticket->id);
+
+    actingAs(new User(['id' => 2]));
+    expect(fn () => $ticket->snapshot())->toThrow(AuthorizationException::class)
+        ->and(fn () => Docket::snapshot($ticket->run()))->toThrow(AuthorizationException::class);
 });
