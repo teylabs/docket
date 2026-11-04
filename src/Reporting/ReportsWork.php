@@ -31,6 +31,29 @@ trait ReportsWork
         return $this;
     }
 
+    /**
+     * Declares the run's named steps up front, key => label, in order, so a watcher can show every step before it starts. Advance with
+     * `step($key)`: the steps before it read as done. Declaring again replaces the list.
+     *
+     * @param  array<string, string>  $steps
+     */
+    public function steps(array $steps): static
+    {
+        if ($steps === [] || count($steps) > 50) {
+            throw new InvalidArgumentException('Declare between 1 and 50 steps.');
+        }
+
+        foreach ($steps as $key => $label) {
+            if ((string) $key === '' || strlen((string) $key) > 255 || $label === '' || strlen($label) > 255) {
+                throw new InvalidArgumentException('Each step needs a key and a label of at most 255 bytes.');
+            }
+        }
+
+        app(Reporter::class)->change($this, fn (Run $run) => $run->steps = $steps);
+
+        return $this;
+    }
+
     public function total(int $units): static
     {
         if ($units < 0) {

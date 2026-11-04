@@ -827,6 +827,16 @@ $run->log('rows.staged', ['count' => 500]); // a code and scalar params, for the
 $run->result($fileId);                     // the run's output, as a reference
 ```
 
+Declare named steps up front when the UI should list them before they start:
+
+```php
+$run->steps(['prepare' => 'Preparing data', 'render' => 'Rendering PDF', 'save' => 'Saving']);
+$run->step('prepare');                     // active; later steps are pending
+$run->step('render');                      // prepare is now done
+```
+
+The snapshot then carries `steps: [{key, label, status}]`, each `pending`, `active`, `done` or `failed`, in both polling and streamed mode. Advancing a step marks every step before it done; a run that succeeds marks them all done; a run that fails, finishes partial or is cancelled marks its current step `failed` with the error code as `error`. Runs that declare no steps have `steps: []`. Run `php artisan vendor:publish --tag=docket-migrations` and migrate to add the `steps` column when upgrading from 0.4.
+
 Without `total()`, the total is the number of items declared up front: keyed jobs in a batch, and items passed to `track()` as an array or collection. A lazy collection declares items as it reaches them, so call `total()` when you know the count. Until there is a total, progress is indeterminate rather than 0%.
 
 > [!WARNING]
@@ -1035,6 +1045,20 @@ const { run, unavailable, retry } = useDocketRun(() => props.run)
 `useDocketRun()` takes a ticket or snapshot, a ref of one, or a getter such as a page prop. It polls the run's `poll` link at `poll_after_ms`, waits out a 429's `Retry-After`, ignores responses older than the snapshot it holds, and stops when the run finishes or the component unmounts. `retry()` posts to the run's `retry` link and follows the new run.
 
 `<DocketProgress>` shows the step (through your `steps` labels), a native `<progress>` bar that is determinate when the run knows its total and indeterminate otherwise, failed and skipped counts, and a final state with Retry. Its status line is a polite live region. The markup is unstyled: style it through the `data-docket-*` attributes, or replace the final state with the `final` slot.
+
+### Variants
+
+`<DocketProgress>` and `<DocketRunModal>` take `variant`:
+
+- `bar` (the default): the current step, a progress bar, counts and Retry, as before.
+- `stepper`: every declared step in order. Pending steps are marked `data-status="pending"` (style them muted), the active step shows a spinner, a done step a check, and a failed step its error inline. A last step holds the `actions` slot, given `enabled` (the run succeeded) and `finished`; in `<DocketRunModal>` it holds Download and View, disabled until the run succeeds.
+- `minimal`: a spinner and the current step's label.
+
+```vue
+<DocketRunModal v-model:open="building" :run="ticket" title="Building the report" variant="stepper" mode="streamed" />
+```
+
+The components stay unstyled: style the `data-docket-step`, `data-docket-spinner`, `data-docket-check` and `data-docket-step-error` hooks. The spinner animates through SVG, without a stylesheet.
 
 ### Streamed Mode
 

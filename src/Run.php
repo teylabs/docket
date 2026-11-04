@@ -63,6 +63,7 @@ use Tey\Docket\Reporting\ReportsWork;
  * @property Carbon $updated_at
  * @property Carbon|null $finished_at
  * @property Carbon|null $expires_at
+ * @property array<string, string>|null $steps
  * @property-read Progress $progress
  */
 class Run extends Model
@@ -124,6 +125,7 @@ class Run extends Model
             'step' => 'string',
             'result' => 'string',
             'output' => 'array',
+            'steps' => 'array',
             'total_explicit' => 'boolean',
             'dispatch_sync' => 'boolean',
             'detached' => 'boolean',
@@ -268,6 +270,41 @@ class Run extends Model
         return $this;
     }
 
+    /**
+     * The declared steps in order, each `pending`, `active`, `done` or `failed`. The run's current `step` is active; the steps before
+     * it are done. A run that succeeded has every step done; one that failed, finished partial or was cancelled marks its current step
+     * failed (with the error code as `error`) and leaves the rest pending. Empty when the work declared no steps.
+     *
+     * @return list<array{key: string, label: string, status: string, error?: string}>
+     */
+    public function stepList(): array
+    {
+        $declared = $this->steps ?? [];
+        $keys = array_map('strval', array_keys($declared));
+        $current = $this->step === null ? false : array_search($this->step, $keys, true);
+        $list = [];
+
+        foreach ($keys as $index => $key) {
+            $status = match (true) {
+                $this->status === RunStatus::Succeeded => 'done',
+                $current === false => 'pending',
+                $index < $current => 'done',
+                $index > $current => 'pending',
+                $this->finished() => 'failed',
+                default => 'active',
+            };
+            $step = ['key' => $key, 'label' => $declared[$key], 'status' => $status];
+
+            if ($status === 'failed') {
+                $step['error'] = $this->error['code'] ?? $this->status->value;
+            }
+
+            $list[] = $step;
+        }
+
+        return $list;
+    }
+
     /** Whether the output may open in the browser: types a browser renders without running the file's own script. @internal */
     public function outputViewable(): bool
     {
@@ -400,6 +437,7 @@ class Run extends Model
             'status' => $this->status->value,
             'revision' => $this->revision,
             'step' => $this->step,
+            'steps' => $this->stepList(),
             'progress' => $this->progress->toArray(),
             'counts' => [
                 'processed' => $this->succeeded_count + $this->failed_count + $this->skipped_count,

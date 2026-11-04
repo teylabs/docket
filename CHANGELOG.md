@@ -2,6 +2,13 @@
 
 ## Unreleased
 
+## [0.5.0] - 2026-11-04
+
+### Added
+
+- Named steps: `$run->steps(['prepare' => 'Preparing data', ...])` declares a run's steps up front, and the snapshot gains `steps: [{key, label, status, error?}]` (`pending`, `active`, `done`, `failed`), the same in polling and streamed mode. Advancing a step marks the earlier ones done; a failure marks the current step failed with the error code. Existing fields are unchanged. Publish and run the new migration (a nullable `steps` column). (#54)
+- `<DocketProgress>` and `<DocketRunModal>` take `variant`: `bar` (the default, unchanged), `stepper` (every step, with a spinner, checks, an inline error, and a last step for the actions) or `minimal` (a spinner and the current step). (#54)
+
 ## [0.4.0] - 2026-11-04
 
 ### Added
