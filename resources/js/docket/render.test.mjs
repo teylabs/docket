@@ -100,3 +100,59 @@ test('the modal passes the variant through and puts Download and View in the ste
     assert.match(succeeded, /<button type="button" data-docket-download>Download<\/button><a href="\/v" target="_blank" rel="noopener" data-docket-view>View<\/a>/);
     assert.equal((succeeded.match(/data-docket-output/g) ?? []).length, 1);
 });
+
+const { default: DocketRunsList } = await import('./DocketRunsList.vue');
+const runsList = JSON.parse(readFileSync(new URL('../../../tests/Fixtures/runs-list.json', import.meta.url), 'utf8'));
+
+test('the runs list renders each row\'s server copy, state and links as given', async () => {
+    const html = await render(DocketRunsList, { rows: runsList.runs, title: 'Reports in progress' });
+    const rows = html.match(/<li data-docket-run[\s\S]*?<\/li>/g);
+    assert.equal(rows.length, 4);
+    assert.match(html, /<h2 data-docket-runs-title>Reports in progress<\/h2>/);
+    assert.match(rows[0], /data-state="slow" data-tone="warning"[\s\S]*data-docket-spinner[\s\S]*Monthly report[\s\S]*data-docket-run-step>Rendering PDF[\s\S]*data-docket-run-message>Taking longer than usual/);
+    assert.match(rows[1], /data-state="timed_out" data-tone="danger"[\s\S]*Timed out[\s\S]*data-docket-run-reason>This is taking much longer than expected. It may have stopped.[\s\S]*<a href="https:\/\/example.test\/help" target="_blank" rel="noopener" data-docket-run-help>Get help<\/a>/);
+    assert.match(rows[2], /data-state="failed"[\s\S]*Something went wrong[\s\S]*It stopped responding./);
+    assert.doesNotMatch(rows[2], /data-docket-spinner/);
+    assert.match(rows[3], /data-state="succeeded"[\s\S]*Done[\s\S]*<a href="\/docket\/runs\/a4\/output\/view\?expires=1&amp;signature=s" target="_blank" rel="noopener" data-docket-run-output>Open<\/a>/);
+});
+
+test('the runs list renders the server\'s copy even when it differs from the defaults', async () => {
+    const row = { ...runsList.runs[0], message: 'Still crunching', label: 'Quarterly export' };
+    const html = await render(DocketRunsList, { rows: [row] });
+    assert.match(html, /Quarterly export[\s\S]*Still crunching/);
+    assert.doesNotMatch(html, /Taking longer than usual/);
+});
+
+test('an empty runs list is hidden by default, or shows the server\'s empty copy', async () => {
+    assert.equal(await render(DocketRunsList, { rows: [] }), '');
+    assert.match(await render(DocketRunsList, { rows: [], hideWhenEmpty: false, empty: 'Nothing running.' }), /data-docket-runs-empty>Nothing running.<\/p>/);
+});
+
+test('the widget compiles, and renders nothing on the server until the browser reads the list', async () => {
+    const { default: DocketRunsWidget } = await import('./DocketRunsWidget.vue');
+    assert.equal(await render(DocketRunsWidget, { filter: { name: 'report.build' }, title: 'Reports' }), '');
+    assert.match(await render(DocketRunsWidget, { filter: { name: 'report.build' }, hideWhenEmpty: false }), /data-docket-runs-empty/);
+});
+
+test('a succeeded run that is still settling keeps its last step active and shows no actions state yet', async () => {
+    const settling = run({ status: 'succeeded', settling: true, poll_after_ms: 2000, steps: [{ key: 'prepare', label: 'Preparing data', status: 'done' }, { key: 'render', label: 'Rendering PDF', status: 'done' }, { key: 'save', label: 'Saving', status: 'active' }] });
+    const html = await render(DocketProgress, { run: settling, variant: 'stepper' }, { actions: ({ enabled, finished }) => h('button', { disabled: !enabled, 'data-finished': String(finished) }, 'View') });
+    assert.equal(attr(html, 'Saving'), 'active');
+    assert.match(html, /data-docket-spinner[\s\S]*Saving/);
+    assert.match(html, /data-docket-step-final data-status="pending"><button disabled data-finished="false">View<\/button>/);
+    assert.doesNotMatch(html, /data-docket-retry/);
+});
+
+test('the stepper hands the server\'s checklist items to a steps slot, so an app can draw them with its own checklist', async () => {
+    const checklist = [
+        { key: 'prepare', label: 'Preparing data', state: 'done', detail: null, reason: null, required: true, action: null },
+        { key: 'render', label: 'Rendering PDF', state: 'failed', detail: null, reason: 'The renderer timed out.', required: true, action: null },
+    ];
+    const seen = [];
+    const html = await render(DocketProgress, { run: run({ status: 'failed', checklist }), variant: 'stepper' }, { steps: props => (seen.push(props), h('ol', { 'data-host-checklist': '' }, props.items.map(item => h('li', { 'data-state': item.state }, `${item.label} ${item.reason ?? ''}`)))) });
+    assert.deepEqual(seen[0].items, checklist);
+    assert.equal(seen[0].enabled, false);
+    assert.equal(seen[0].finished, true);
+    assert.match(html, /data-host-checklist[\s\S]*data-state="failed">Rendering PDF The renderer timed out./);
+    assert.doesNotMatch(html, /data-docket-steps/);
+});

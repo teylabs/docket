@@ -21,7 +21,19 @@ it('boots the provider and merges the schema and snapshot config', function () {
             'stale_after' => 3600,
             'poll_after_ms' => 2000,
             'output_link_ttl' => 600,
+            'settle_seconds' => 30,
             'stream' => ['seconds' => 60, 'heartbeat_seconds' => 15, 'check_ms' => 1000],
+            'runs' => [
+                'limit' => 10, 'max_limit' => 50, 'scan' => 200, 'linger_seconds' => 30, 'max_linger_seconds' => 3600, 'failed_linger_seconds' => 600,
+                'slow_after' => 120, 'timeout_after' => null, 'idle_poll_ms' => 15000, 'help_url' => null, 'labels' => [],
+                'reasons' => ['run.stalled' => 'It stopped responding.'],
+                'copy' => [
+                    'queued' => 'Waiting to start…', 'running' => 'Working…', 'slow' => 'Taking longer than usual', 'timed_out' => 'Timed out', 'finishing' => 'Finishing…',
+                    'succeeded' => 'Done', 'partial' => 'Finished with some problems', 'failed' => 'Something went wrong', 'cancelled' => 'Cancelled',
+                    'timed_out_reason' => 'This is taking much longer than expected. It may have stopped.', 'empty' => 'Nothing running.',
+                    'output' => 'Open', 'help' => 'Get help',
+                ],
+            ],
             'max_depth' => 10,
             'expired_link' => ['url' => null, 'label' => 'Back'],
             'routes' => ['enabled' => true, 'prefix' => 'docket', 'middleware' => ['web']],
@@ -34,6 +46,7 @@ it('preserves unspecified route defaults and replaces middleware lists', functio
 
     expect(config('docket.routes'))->toBe($expected)
         ->and(config('docket.ttl'))->toBe(60)
+        ->and(config('docket.runs.copy.slow'))->toBe('Taking longer than usual')
         ->and(config('docket.poll_after_ms'))->toBe(2000);
 
     Route::setRoutes(new RouteCollection);
@@ -59,7 +72,7 @@ it('publishes the Vue components under docket-vue to the README\'s @/docket fold
     $vue = DocketServiceProvider::pathsToPublish(DocketServiceProvider::class, 'docket-vue');
 
     expect(array_values($vue))->toBe([resource_path('js/docket')]);
-    foreach (['index.ts', 'run.ts', 'useDocketRun.ts', 'DocketProgress.vue', 'DocketRunModal.vue'] as $file) {
+    foreach (['index.ts', 'run.ts', 'runs.ts', 'useDocketRun.ts', 'useDocketRuns.ts', 'DocketProgress.vue', 'DocketRunModal.vue', 'DocketRunsWidget.vue'] as $file) {
         expect(array_key_first($vue).'/'.$file)->toBeFile();
     }
 });
@@ -74,16 +87,16 @@ it('publishes the migration and configuration under their documented tags', func
         ->and(array_values($configuration))->toBe([config_path('docket.php')]);
 });
 
-it('registers only the six JSON routes, the event stream and the two signed output routes with web middleware and cacheable controller actions', function () {
+it('registers only the six JSON routes, the event stream, the runs list and its stream, and the two signed output routes with web middleware and cacheable controller actions', function () {
     $routes = collect(Route::getRoutes()->getRoutes())->filter(fn ($route) => str_starts_with($route->getName() ?? '', 'docket.'));
-    expect($routes)->toHaveCount(9);
+    expect($routes)->toHaveCount(11);
     $cacheable = new RouteCollection;
     foreach ($routes as $route) {
         expect($route->gatherMiddleware())->toContain('web');
         $route->prepareForSerialization();
         $cacheable->add($route);
     }
-    expect($cacheable->compile()['attributes'])->toHaveKeys(['docket.show', 'docket.stream', 'docket.items', 'docket.logs', 'docket.children', 'docket.cancel', 'docket.retry', 'docket.output', 'docket.output.view']);
+    expect($cacheable->compile()['attributes'])->toHaveKeys(['docket.runs', 'docket.runs.stream', 'docket.show', 'docket.stream', 'docket.items', 'docket.logs', 'docket.children', 'docket.cancel', 'docket.retry', 'docket.output', 'docket.output.view']);
     expect($routes->filter(fn ($route) => str_starts_with($route->getName(), 'docket.output'))->every(fn ($route) => in_array(OutputSignature::class, $route->gatherMiddleware(), true)))->toBeTrue();
     getJson('/docket/runs/unknown/watch')->assertNotFound();
 });

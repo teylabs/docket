@@ -28,8 +28,13 @@ class DocketServiceProvider extends ServiceProvider
             $this->app->make('config')->set('docket.routes', array_replace(
                 $defaults['routes'], $this->app->make('config')->array('docket.routes'),
             ));
+            // A config published before the runs list existed, or one that overrides a few of its keys, keeps the other defaults.
+            $this->app->make('config')->set('docket.runs', array_replace_recursive(
+                $defaults['runs'], $this->app->make('config')->array('docket.runs', []),
+            ));
         }
 
+        $this->app->singleton(Listing\RunList::class);
         $this->app->scoped(CurrentRun::class);
         $this->app->scoped(Tracking::class);
         $this->app->scoped(Transactions::class, fn ($app) => new Transactions($app->make('db.transactions')));

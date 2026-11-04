@@ -52,6 +52,7 @@ onMounted(() => open.value && dialog.value?.showModal());
         <h2 id="docket-modal-title" data-docket-modal-title>{{ title }}</h2>
         <DocketProgress :run="run" :steps="steps" :unavailable="unavailable" :variant="variant" @retry="retry">
             <template #final="slotProps"><slot name="final" v-bind="slotProps" :retry="retry" /></template>
+            <template v-if="variant === 'stepper' && $slots.steps" #steps="slotProps"><slot name="steps" v-bind="slotProps" :download="startDownload" :retry="retry" /></template>
             <template v-if="variant === 'stepper'" #actions="{ enabled }">
                 <slot name="complete" :run="run" :download="startDownload" :enabled="enabled">
                     <div data-docket-output>

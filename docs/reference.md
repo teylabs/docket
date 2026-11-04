@@ -375,9 +375,20 @@ The workspace's `view` and `update` policies decide membership and control acces
 
 The policy requires an authenticated viewer and uses that viewer, including an explicit `tree($viewer)` or `Gate::forUser($viewer)`, rather than the ambient signed-in user. Laravel's gate hooks and application policy registration still apply. Package cancel/retry routes check `view` first, so permission to update a subject alone cannot reveal or control a hidden run. Existing status, expiry and replay restrictions remain in force. Use an application `Run` policy for different ability mappings; this policy adds no configuration keys, schema columns or JSON fields.
 
+### `Listing\RunList` (`Docket::runs()`)
+
+| Signature | Meaning | Ms |
+| --- | --- | --- |
+| `scopeUsing(Closure(Builder, ?Authenticatable): void $scope): static` | Narrows the candidate query before each row's `view` check. Replaces the initiator pre-filter used with the default policy. | 0.6 |
+| `describeUsing(Closure(array $row, Run $run): array $describe): static` | Adjusts each row after Docket builds it. | 0.6 |
+| `rows(array $filter, ?Authenticatable $viewer = null): array` | The rows for `['name' => …, 'subject_type'?, 'subject_id'?, 'limit'?, 'linger'?]` that the viewer may view. | 0.6 |
+| `payload(array $filter, ?Authenticatable $viewer = null): array` | The endpoint's answer: rows, `active`, `empty`, `poll_after_ms`, `generated_at`. | 0.6 |
+| `row(Run $run, ?int $linger = null): array` | One run as a row, without a policy check. | 0.6 |
+| `Run::outputLink(string $url, string $label): static` | Records where the result lives in the app (an http(s) URL or a path, otherwise `InvalidArgumentException`); the done row's `links.output`. | 0.6 |
+
 ### Routes
 
-The table in the README. Package JSON routes: 0.1. The watch page: 0.2. The external update route `POST /docket/runs/{id}/updates` (writer grants): 0.3. The event stream `GET /docket/runs/{token}/stream` (streamed mode): 0.4.
+The table in the README. Package JSON routes: 0.1. The watch page: 0.2. The external update route `POST /docket/runs/{id}/updates` (writer grants): 0.3. The event stream `GET /docket/runs/{token}/stream` (streamed mode): 0.4. The runs list `GET /docket/runs` (`docket.runs`) and its stream `GET /docket/runs/stream` (`docket.runs.stream`): 0.6.
 
 Released in 0.1.0 (#12):
 
@@ -393,6 +404,8 @@ Released in 0.1.0 (#12):
 | --- | --- | --- |
 | `useDocketPoll(prop: string, options?: { interval?: number, reloadOnFinish?: string[] })` | Returns the live snapshot (a Vue ref, or a React value) for a page prop that holds a ticket or a snapshot. It polls `links.poll`, stops at a final status and follows a changed prop. `reloadOnFinish` makes Inertia reload those props once the run finishes. | 0.2 |
 | `<DocketProgress :run>` | Renders a snapshot or ticket: step, bar (indeterminate without a total), counts, final state, `aria-live`. | 0.2 |
+| `useDocketRuns(filter, { mode?, prefix? })` | Headless runs-in-progress list: `rows` (the server's row descriptors, minus finished rows past `linger_until`), `list`, `connection`, `refresh()`, `stop()`. Fast polling while active, slow while idle, paused while hidden; `streamed` mode with a polling fallback. Vue only. | 0.6 |
+| `<DocketRunsList :rows>` / `<DocketRunsWidget :filter>` | Render rows as the server described them; the widget adds the transport. Props: `title`, `hideWhenEmpty`, `linger`, `mode`, `prefix`; a `row` slot. Vue only. | 0.6 |
 | `<DocketTree :run>` | The root's `<DocketProgress>` plus a live list of its children (status, progress, latest log code), read from `links.children`. Only children the viewer may view appear. | 0.2 |
 
 ### Blade

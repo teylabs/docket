@@ -1,13 +1,14 @@
 <script setup lang="ts">
 import { computed } from 'vue';
-import { currentStepLabel, finished, percent, stepList, succeeded, type DocketRun, type DocketVariant } from './run';
+import { checklistItems, currentStepLabel, finished, percent, stepList, succeeded, type DocketRun, type DocketVariant } from './run';
 
 /**
  * A run's progress, in one of three variants. `bar` (the default): the step, a determinate bar when the total is known
  * (indeterminate otherwise), counts, and a final state with Retry. `stepper`: every declared step, pending ones muted, the
  * active one with a spinner, done ones with a check, a failed one with its error, then a last step holding the `actions` slot
  * (enabled once the run finishes). `minimal`: a spinner and the current step. Unstyled: style it through the data-docket-*
- * hooks, or replace parts through the slots.
+ * hooks, or replace parts through the slots. In `stepper`, the `steps` slot replaces the whole list with your own renderer, given
+ * `items` (the server's checklist items), `enabled` and `finished`: pass them to kit's `<Checklist :items>`, for instance.
  */
 const props = withDefaults(defineProps<{
     run: DocketRun | null;
@@ -35,7 +36,8 @@ const counts = computed(() => props.run?.counts);
 
 <template>
     <div data-docket-progress :data-status="status" :data-variant="variant">
-        <template v-if="variant === 'stepper'">
+        <slot v-if="variant === 'stepper' && $slots.steps" name="steps" :items="checklistItems(run)" :run="run" :enabled="succeeded(run)" :finished="over" />
+        <template v-else-if="variant === 'stepper'">
             <p class="sr-only" data-docket-message role="status" aria-live="polite">{{ message }}</p>
             <ol data-docket-steps>
                 <li v-for="item in list" :key="item.key" data-docket-step :data-status="item.status" :aria-current="item.status === 'active' ? 'step' : undefined">

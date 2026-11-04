@@ -2,6 +2,19 @@
 
 ## Unreleased
 
+### Fixed
+
+- A run no longer shows every step done before its result is there. The status was committed before `then()` callbacks and `RunFinished` listeners ran, and those often record the output, so a stepper could show all checks with Download and View still unavailable. A finished run is now `settling` until they finish (at most `docket.settle_seconds`, 30): the snapshot gains `settling`, keeps `poll_after_ms`, and keeps the last step `active`; streams stay open, and `finished()` and `succeeded()` in the Vue helpers wait for it. The runs list shows it as `finishing` ("Finishing…"). (#56)
+
+### Added
+
+- Runs in progress: `GET /docket/runs?name=…` (`docket.runs`) lists the runs of one name, optionally about one subject, that are active or just finished, as display-ready rows decided on the server: label, current step, state, copy, failure reason, and output and help links. Every row passes the run's `view` policy; `Docket::runs()->scopeUsing()` narrows the query and `->describeUsing()` adjusts rows. It is bounded by `limit` and `docket.runs.scan`, and a new migration adds the indexes it reads. `GET /docket/runs/stream` pushes the list as Server-Sent Events. (#56)
+- Stuck runs never vanish from the list: past `docket.runs.slow_after` a row is `slow` ("Taking longer than usual"); past its timeout (`docket.runs.timeout_after`, else the run's stale interval) it is `timed_out` with a reason and an optional `docket.runs.help_url` link. Finished rows linger for `linger_seconds` (failed ones for `failed_linger_seconds`), then drop off. (#56)
+- `useDocketRuns(filter)` (headless: the server's rows and the connection state), `<DocketRunsList>` (renders rows as given) and `<DocketRunsWidget>` (both together). Polling is fast while a row is active, slow while idle and paused while the tab is hidden; `mode="streamed"` uses the run stream's transport, now exported as `openEventStream()`, with the same polling fallback. Publish and run the new migration. (#56)
+- The snapshot gains `checklist`: the steps as server-driven checklist items (`key`, `label`, `state`, `detail`, `reason`, `required`, `action`), with the failure reason as text from `docket.runs.reasons`. In `stepper`, `<DocketProgress>` and `<DocketRunModal>` take a `steps` slot given `items`, `enabled` and `finished`, so an app can draw the steps with its own checklist component; `checklistItems(run)` maps an older snapshot. Docket takes no UI dependency. (#56)
+- `$run->outputLink($url, $label)` records where a run's result lives in the app (an http(s) URL or a path); the runs list offers it on the done row in place of the file link. A nullable `output_link` column, in the same new migration. (#56)
+- A list row for a run that failed or finished partial because a child failed shows the failing child's own reason, followed down the tree, instead of the generic `run.child_failed` copy. (#56)
+
 ## [0.5.0] - 2026-11-04
 
 ### Added

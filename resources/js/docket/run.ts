@@ -12,6 +12,17 @@ export type DocketStep = { key: string; label: string; status: DocketStepStatus;
 /** How a progress component looks: `bar` (the default), `stepper` (every step listed) or `minimal` (a spinner and the current step). */
 export type DocketVariant = 'bar' | 'stepper' | 'minimal';
 
+/** A step in the checklist shape: `state` is the step status, `reason` the server's failure reason. */
+export type DocketChecklistItem = {
+    key: string;
+    label: string;
+    state: 'pending' | 'active' | 'done' | 'failed' | 'skipped';
+    detail: string | null;
+    reason: string | null;
+    required: boolean;
+    action: { label: string; url?: string | null; name?: string | null } | null;
+};
+
 export type DocketRun = {
     schema_version: number;
     id: string;
@@ -25,17 +36,22 @@ export type DocketRun = {
     counts?: { processed: number; succeeded: number; failed: number; skipped: number };
     error?: { code: string; params: Record<string, unknown> } | null;
     output?: { name: string; mime: string; size: number } | null;
+    /** The steps as checklist items, ready for a server-driven checklist component (kit's `<Checklist :items>`). Since 0.6. */
+    checklist?: DocketChecklistItem[];
+    /** The run has its final status, but its completion callbacks (which often record the output) are still running. Keep reading. */
+    settling?: boolean;
     poll_after_ms: number | null;
     links: { poll?: string; cancel?: string; retry?: string; download?: string; view?: string; [key: string]: string | undefined };
 };
 
-export const finished = (run: Pick<DocketRun, 'status'> | null | undefined): boolean =>
-    run != null && ['succeeded', 'partial', 'failed', 'cancelled'].includes(run.status);
+/** Whether the run is over: a final status, and the server no longer reports it `settling`. */
+export const finished = (run: Pick<DocketRun, 'status' | 'settling'> | null | undefined): boolean =>
+    run != null && run.settling !== true && ['succeeded', 'partial', 'failed', 'cancelled'].includes(run.status);
 
 /** A ticket (what a controller returns) carries only the run's identity and status; a snapshot (the poll link's answer) has its progress. */
 export const isTicket = (run: DocketRun): boolean => !('progress' in run);
 
-export const succeeded = (run: Pick<DocketRun, 'status'> | null | undefined): boolean => run?.status === 'succeeded';
+export const succeeded = (run: Pick<DocketRun, 'status' | 'settling'> | null | undefined): boolean => run?.status === 'succeeded' && run.settling !== true;
 
 /** A determinate percentage only when the run knows its total; null asks for an indeterminate bar. */
 export function percent(run: DocketRun | null | undefined): number | null {
@@ -144,25 +160,30 @@ export type DocketMode = 'streamed' | 'polling';
 /** The run's event stream, next to its `poll` link; null when the run has no routes. */
 export const streamUrl = (run: Pick<DocketRun, 'links'>): string | null => (run.links.poll ? `${run.links.poll}/stream` : null);
 
-type EventSourceLike = {
+export type EventSourceLike = {
     addEventListener(type: string, listener: (event: { data: string }) => void): void;
     onerror: ((event: unknown) => void) | null;
     close(): void;
 };
 
+/** The browser's EventSource, or a stand-in with the same surface (tests). */
+export type EventSourceConstructor = new (url: string, init?: { withCredentials?: boolean }) => EventSourceLike;
+
+const defaultSource = (): EventSourceConstructor | undefined => (globalThis as { EventSource?: EventSourceConstructor }).EventSource;
+
 /**
- * Listens to a run's event stream. Each `snapshot` event goes to `snapshot`. The server ends a stream with an `end` event:
- * `finished` closes it, `timeout` reconnects at once, and `unavailable`, any connection error or a garbled event closes it
- * for good and calls `fallback` once, so the caller can poll instead. Returns a function that closes the stream, or null
- * when streaming isn't possible (no EventSource, or no routes), in which case the caller should poll.
+ * Listens to a Docket event stream at `url`. Each `event` event's JSON goes to `message`. The server ends a stream with an `end`
+ * event: `finished` closes it, `timeout` reconnects at once, and `unavailable`, any connection error or a garbled event closes it
+ * for good and calls `fallback` once, so the caller can poll instead. Returns a function that closes the stream, or null when
+ * streaming isn't possible (no EventSource), in which case the caller should poll. Runs and run lists share this transport.
  */
-export function openStream(
-    run: Pick<DocketRun, 'links'>,
-    handlers: { snapshot: (run: DocketRun) => void; fallback: () => void },
-    Source: (new (url: string, init?: { withCredentials?: boolean }) => EventSourceLike) | undefined = (globalThis as { EventSource?: new (url: string) => EventSourceLike }).EventSource,
+export function openEventStream<T>(
+    url: string,
+    event: string,
+    handlers: { message: (payload: T) => void; fallback: () => void },
+    Source: EventSourceConstructor | undefined = defaultSource(),
 ): (() => void) | null {
-    const url = streamUrl(run);
-    if (!url || typeof Source !== 'function') return null;
+    if (typeof Source !== 'function') return null;
     let source: EventSourceLike | null = null;
     let closed = false;
 
@@ -178,17 +199,17 @@ export function openStream(
     const connect = () => {
         const current = new Source(url, { withCredentials: true });
         source = current;
-        current.addEventListener('snapshot', event => {
+        current.addEventListener(event, message => {
             try {
-                handlers.snapshot(JSON.parse(event.data) as DocketRun);
+                handlers.message(JSON.parse(message.data) as T);
             } catch {
                 fail();
             }
         });
-        current.addEventListener('end', event => {
+        current.addEventListener('end', message => {
             let reason: unknown = null;
             try {
-                reason = (JSON.parse(event.data) as { reason?: unknown }).reason;
+                reason = (JSON.parse(message.data) as { reason?: unknown }).reason;
             } catch {
                 // An unreadable end is treated as unavailable.
             }
@@ -210,6 +231,21 @@ export function openStream(
     return close;
 }
 
+/**
+ * Listens to a run's event stream: each `snapshot` event goes to `snapshot`, with the reconnect and fallback rules of
+ * `openEventStream`. Returns null when streaming isn't possible (no EventSource, or no routes); the caller should poll.
+ */
+export function openStream(
+    run: Pick<DocketRun, 'links'>,
+    handlers: { snapshot: (run: DocketRun) => void; fallback: () => void },
+    Source: EventSourceConstructor | undefined = defaultSource(),
+): (() => void) | null {
+    const url = streamUrl(run);
+    if (!url) return null;
+
+    return openEventStream<DocketRun>(url, 'snapshot', { message: handlers.snapshot, fallback: handlers.fallback }, Source);
+}
+
 /** The run's declared steps, each label replaced by the caller's own for that key when given. Empty when the work declared none. */
 export function stepList(run: DocketRun | null | undefined, labels: Record<string, string> = {}): DocketStep[] {
     return (run?.steps ?? []).map(step => ({ ...step, label: labels[step.key] ?? step.label }));
@@ -221,4 +257,14 @@ export function currentStepLabel(run: DocketRun | null | undefined, labels: Reco
     if (current) return current.label;
 
     return run?.step ? labels[run.step] ?? run.step : null;
+}
+
+/**
+ * The run's steps as checklist items: the server's `checklist` when sent, else its `steps` mapped (`state` is `status`, `reason`
+ * is `error`) for a server older than 0.6. Empty when the work declared none.
+ */
+export function checklistItems(run: DocketRun | null | undefined): DocketChecklistItem[] {
+    if (run?.checklist) return run.checklist;
+
+    return (run?.steps ?? []).map(step => ({ key: step.key, label: step.label, state: step.status, detail: null, reason: step.error ?? null, required: true, action: null }));
 }

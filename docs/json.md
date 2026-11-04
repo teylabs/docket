@@ -42,7 +42,9 @@ All timestamps are ISO 8601 UTC. Responses send `Cache-Control: private, no-stor
 | `created_at` | string | no | When the run was dispatched, or started inline. |
 | `finished_at` | string | yes | Set at the final status. Clients stop polling. |
 | `expires_at` | string | yes | When the run will be deleted; `null` while unfinished under the default TTL. |
-| `poll_after_ms` | int | yes | Suggested delay before the next poll; `null` once finished. |
+| `checklist` | array | no | The steps as checklist items: `[{ key, label, state, detail, reason, required, action }]`; `state` is the step status and `reason` the failure reason text (`docket.runs.reasons`, else the code). `[]` without declared steps (0.6). |
+| `settling` | bool | no | The run has its final status, but its `then()`/`finally()` callbacks and `RunFinished` listeners are still running (at most `docket.settle_seconds`). The last step stays `active` and `poll_after_ms` stays set; keep reading (0.6). |
+| `poll_after_ms` | int | yes | Suggested delay before the next poll; `null` once finished and settled. |
 | `links.poll` | string | no | This snapshot. |
 | `links.items` | string | no | Cursor-paginated items; accepts `?status=`. |
 | `links.logs` | string | no | Cursor-paginated logs. |
@@ -55,6 +57,41 @@ Full example: README, "The Status Snapshot". A failed run, for illustration:
 ```json
 { "status": "failed", "error": { "code": "file.unsupported", "params": {} }, "finished_at": "2026-10-13T14:03:40Z", "poll_after_ms": null, "links": { "poll": "…", "items": "…", "logs": "…", "retry": "…" } }
 ```
+
+### Runs in progress (`GET /docket/runs`)
+
+- [x] A policy-checked list of the runs of one name that are active or finished within their linger window, as display-ready rows decided on the server; streamed as `runs` events by `GET /docket/runs/stream` (#56, 0.6).
+
+Query: `name` (required), `subject_type`, `subject_id`, `limit` (1 to `docket.runs.max_limit`), `linger` (seconds, 0 to `docket.runs.max_linger_seconds`). Invalid values return 422. The list is limited per viewer and filter like snapshot polling (429 with `Retry-After`).
+
+| Field | Type | Null | Meaning |
+| --- | --- | --- | --- |
+| `schema_version` | int | no | `1`. |
+| `runs` | array | no | The rows below: active runs first (newest first), then finished ones (most recently finished first). |
+| `active` | bool | no | Whether any row is active. |
+| `empty` | string | no | The copy for an empty list. |
+| `poll_after_ms` | int | no | The next poll: `docket.poll_after_ms` while a row is active, `docket.runs.idle_poll_ms` otherwise. |
+| `generated_at` | string | no | The server's time, so clients read `linger_until` on the server's clock. |
+
+Each row:
+
+| Field | Type | Null | Meaning |
+| --- | --- | --- | --- |
+| `id`, `token`, `name`, `status` | string | no | As in the snapshot. |
+| `label` | string | no | `docket.runs.labels[name]`, else the run name. |
+| `state` | string | no | `queued`, `running`, `slow`, `timed_out`, `finishing` (finished, still settling: no output link yet), `succeeded`, `partial`, `failed` or `cancelled`. |
+| `active` | bool | no | The run is unfinished (including `slow` and `timed_out`). |
+| `tone` | string | no | `neutral`, `warning`, `danger` or `success`. |
+| `message` | string | no | The copy for the state, from `docket.runs.copy`. |
+| `reason` | string | yes | A timeout reason, or a failure reason from `docket.runs.reasons` by error code. For `run.child_failed` (or a partial run without a code), the failing child's code is used, followed down the tree. |
+| `step` | object | yes | `{ key, label }`: the active or failed declared step, else the run's `step`. |
+| `steps` | array | no | As in the snapshot. |
+| `progress` | object | no | As in the snapshot. |
+| `started_at`, `finished_at` | string | `finished_at` | When the run was created, and finished. |
+| `slow_at`, `timeout_at` | string | yes | When the run becomes `slow` and `timed_out`. |
+| `linger_until` | string | yes | When a finished row drops off; `null` while active. |
+| `links.output` | object | absent | `{ url, label }`: the link recorded with `outputLink()`, else the run's file (view link for viewable types, else download), signed. Only once succeeded. |
+| `links.help` | object | absent | `{ url, label }`: `docket.runs.help_url`, on `timed_out`, `failed` and `partial` rows. |
 
 ### Ticket (`run()` and dispatch responses, `Ticket::toArray()`)
 

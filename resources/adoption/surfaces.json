@@ -40,6 +40,7 @@
           "Tey\\Docket\\Facades\\Docket",
           "Tey\\Docket\\Docketable",
           "Tey\\Docket\\HasRuns",
+          "Tey\\Docket\\Listing\\RunList",
           "Tey\\Docket\\PendingRun",
           "Tey\\Docket\\Run",
           "Tey\\Docket\\Ticket"
