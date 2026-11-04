@@ -30,6 +30,9 @@ class PendingRun
 
     private bool $isUnique = false;
 
+    /** @var list<string> */
+    private array $uniqueScope = [];
+
     private bool $isDetached = false;
 
     private bool $isRequired = false;
@@ -92,6 +95,21 @@ class PendingRun
     public function unique(): static
     {
         $this->isUnique = true;
+
+        return $this;
+    }
+
+    /**
+     * Starts the run or reuses the active one with the same name, subject and these extra values (a format, a period), so a
+     * repeat click, a refresh or a concurrent request gets the run already in flight. Implies `unique()`; the guard is a unique
+     * database key, so two racing starts never create two runs. Values are hashed, never stored.
+     *
+     * @api
+     */
+    public function uniqueBy(string|int ...$scope): static
+    {
+        $this->isUnique = true;
+        $this->uniqueScope = array_map('strval', array_values($scope));
 
         return $this;
     }
@@ -251,7 +269,9 @@ class PendingRun
     protected function execute(bool $sync, ?Closure $callback): Ticket
     {
         $subjectKey = $this->subject?->getKey();
-        $unique = $this->isUnique ? hash('sha256', serialize([$this->name, $this->subject?->getMorphClass(), is_int($subjectKey) ? (string) $subjectKey : $subjectKey])) : null;
+        $identity = [$this->name, $this->subject?->getMorphClass(), is_int($subjectKey) ? (string) $subjectKey : $subjectKey];
+        // Without a scope the key is what 0.1 stored, so runs started before an upgrade are still found.
+        $unique = $this->isUnique ? hash('sha256', serialize($this->uniqueScope === [] ? $identity : [...$identity, $this->uniqueScope])) : null;
         $key = $this->key === null ? null : hash('sha256', serialize([$this->name, $this->key]));
 
         if ($existing = $this->existing($unique, $key)) {
@@ -358,7 +378,15 @@ class PendingRun
             }
         }
 
-        return $unique === null ? null : Run::query()->unfinished()->named($this->name)
+        if ($unique === null) {
+            return null;
+        }
+
+        if ($this->uniqueScope !== []) {
+            return Run::query()->unfinished()->where('unique_key', $unique)->first();
+        }
+
+        return Run::query()->unfinished()->named($this->name)
             ->where('subject_type', $this->subject?->getMorphClass())
             ->where('subject_id', $this->subject?->getKey())->first();
     }

@@ -43,10 +43,12 @@ All timestamps are ISO 8601 UTC. Responses send `Cache-Control: private, no-stor
 | `finished_at` | string | yes | Set at the final status. Clients stop polling. |
 | `expires_at` | string | yes | When the run will be deleted; `null` while unfinished under the default TTL. |
 | `checklist` | array | no | The steps as checklist items: `[{ key, label, state, detail, reason, code, required, action }]`; `state` is the step status, `reason` the failure reason text (`docket.runs.reasons`, else `docket.runs.copy.reason`) and `code` the error code (0.6.1). `[]` without declared steps (0.6). |
+| `failure` | object | yes | `{ step, code, reason }` once a run failed: the failed step's label (or `null`), the error code followed down to the failing child, and the reason to show (0.6.4). |
 | `failed_children` | array | no | Direct, attached children that failed and the viewer may view, oldest first, at most 20: `[{ id, name, label, required, code, reason }]` (0.6.2). |
 | `settling` | bool | no | The run has its final status, but its `then()`/`finally()` callbacks and `RunFinished` listeners are still running (at most `docket.settle_seconds`). The last step stays `active` and `poll_after_ms` stays set; keep reading (0.6). |
 | `poll_after_ms` | int | yes | Suggested delay before the next poll; `null` once finished and settled. |
 | `links.poll` | string | no | This snapshot. |
+| `links.stream` | string | no | The run's Server-Sent Events stream (0.6.4). |
 | `links.items` | string | no | Cursor-paginated items; accepts `?status=`. |
 | `links.logs` | string | no | Cursor-paginated logs. |
 | `links.children` | string | absent | Present when the run has children: cursor-paginated child tickets. |

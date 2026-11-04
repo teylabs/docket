@@ -1,4 +1,5 @@
 export { default as DocketProgress } from './DocketProgress.vue';
+export { default as DocketRunDialog } from './DocketRunDialog.vue';
 export { default as DocketRunModal } from './DocketRunModal.vue';
 export { default as DocketRunsList } from './DocketRunsList.vue';
 export { default as DocketRunsWidget } from './DocketRunsWidget.vue';

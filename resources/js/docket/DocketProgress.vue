@@ -5,8 +5,9 @@ import { checklistItems, currentStepLabel, finished, percent, stepList, succeede
 /**
  * A run's progress, in one of three variants. `bar` (the default): the step, a determinate bar when the total is known
  * (indeterminate otherwise), counts, and a final state with Retry. `stepper`: every declared step, pending ones muted, the
- * active one with a spinner, done ones with a check, a failed one with its error, then a last step holding the `actions` slot
- * (enabled once the run finishes). `minimal`: a spinner and the current step. Unstyled: style it through the data-docket-*
+ * active one with a spinner, done ones with a check, a failed one with its reason (never the raw code), then a last step holding
+ * the `actions` slot (enabled once the run succeeds). After a failure it lists only the steps up to the failed one and drops the
+ * actions step, and it leaves Retry to the host unless `retry` is set. `minimal`: a spinner and the current step. Unstyled: style it through the data-docket-*
  * hooks, or replace parts through the slots. In `stepper`, the `steps` slot replaces the whole list with your own renderer, given
  * `items` (the server's checklist items), `enabled` and `finished`: pass them to kit's `<Checklist :items>`, for instance.
  */
@@ -17,7 +18,11 @@ const props = withDefaults(defineProps<{
     unavailable?: boolean;
     labels?: Partial<Record<'queued' | 'running' | 'succeeded' | 'partial' | 'failed' | 'cancelled' | 'unavailable' | 'retry', string>>;
     variant?: DocketVariant;
-}>(), { steps: () => ({}), unavailable: false, labels: () => ({}), variant: 'bar' });
+    /** Text for failure codes on a failed step; an unlisted code shows the server's reason, else a generic message, never the code. */
+    failures?: Record<string, string>;
+    /** Show the built-in Retry button once the run finishes unsuccessfully. Defaults to on for `bar` and `minimal`, off for `stepper` (the host owns its actions). */
+    retry?: boolean;
+}>(), { steps: () => ({}), unavailable: false, labels: () => ({}), variant: 'bar', failures: () => ({}), retry: undefined });
 const emit = defineEmits<{ retry: [] }>();
 
 const text = computed(() => ({
@@ -27,7 +32,18 @@ const text = computed(() => ({
 }));
 const value = computed(() => percent(props.run));
 const step = computed(() => currentStepLabel(props.run, props.steps));
-const list = computed(() => stepList(props.run, props.steps));
+const reasons = computed(() => Object.fromEntries(checklistItems(props.run).map(item => [item.key, item.reason])));
+/** After an unsuccessful finish, only the steps up to the one that failed: later ones never ran. */
+const list = computed(() => {
+    const all = stepList(props.run, props.steps).map(item => item.status === 'failed'
+        ? { ...item, error: (item.error && props.failures[item.error]) ?? reasons.value[item.key] ?? text.value.failed }
+        : item);
+    const failedAt = all.findIndex(item => item.status === 'failed');
+
+    return finished(props.run) && !succeeded(props.run) && failedAt >= 0 ? all.slice(0, failedAt + 1) : all;
+});
+const showRetry = computed(() => props.retry ?? props.variant !== 'stepper');
+const showActions = computed(() => !(finished(props.run) && !succeeded(props.run)));
 const over = computed(() => finished(props.run) || props.unavailable);
 const status = computed(() => (props.unavailable ? 'unavailable' : props.run?.status ?? 'queued'));
 const message = computed(() => (status.value === 'running' || status.value === 'queued') && step.value ? step.value : text.value[status.value]);
@@ -49,7 +65,7 @@ const counts = computed(() => props.run?.counts);
                     <span v-if="item.status === 'done'" class="sr-only"> (done)</span>
                     <span v-if="item.status === 'failed'" data-docket-step-error role="alert">{{ item.error }}</span>
                 </li>
-                <li v-if="$slots.actions" data-docket-step data-docket-step-final :data-status="succeeded(run) ? 'done' : over ? 'failed' : 'pending'">
+                <li v-if="$slots.actions && showActions" data-docket-step data-docket-step-final :data-status="succeeded(run) ? 'done' : over ? 'failed' : 'pending'">
                     <slot name="actions" :run="run" :enabled="succeeded(run)" :finished="over" />
                 </li>
             </ol>
@@ -67,7 +83,7 @@ const counts = computed(() => props.run?.counts);
             </p>
         </template>
         <slot v-if="over" name="final" :run="run" :status="status">
-            <button v-if="run?.links.retry && status !== 'succeeded'" type="button" data-docket-retry @click="emit('retry')">{{ text.retry }}</button>
+            <button v-if="showRetry && run?.links.retry && status !== 'succeeded'" type="button" data-docket-retry @click="emit('retry')">{{ text.retry }}</button>
         </slot>
     </div>
 </template>

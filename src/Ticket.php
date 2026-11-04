@@ -54,6 +54,20 @@ class Ticket implements Arrayable, JsonSerializable, Responsable
         return Run::findOrFail($this->id);
     }
 
+    /**
+     * The run's full snapshot (the same JSON as its `poll` link, including `steps`, `checklist`, `failure` and `links.stream`),
+     * for a page or modal prop: the first paint needs no fetch, and `useDocketRun()` follows it from there. Links reflect the
+     * signed-in user's abilities, as the poll link's do.
+     *
+     * @return array<string, mixed>
+     *
+     * @api
+     */
+    public function snapshot(): array
+    {
+        return $this->run()->toArray();
+    }
+
     /** @return array{schema_version: int, id: string, token: string, name: string, status: string, revision: int, poll_after_ms: int|null, links: array<string, string>} */
     public function toArray(): array
     {

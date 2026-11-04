@@ -26,6 +26,16 @@ class Docket
         return app(Listing\RunList::class);
     }
 
+    /**
+     * A run's full snapshot for a page or modal prop: `$ticket->snapshot()`, or the stored run's.
+     *
+     * @return array<string, mixed>
+     */
+    public function snapshot(Run|Ticket $run): array
+    {
+        return $run instanceof Ticket ? $run->snapshot() : $run->toArray();
+    }
+
     public function find(string $token): ?Run
     {
         return Run::where('token', $token)->first();

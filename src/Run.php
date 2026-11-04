@@ -433,6 +433,42 @@ class Run extends Model
             })->all());
     }
 
+    /**
+     * Why a failed run failed, once, for display: the failed step's label (if the work declared steps), the error code followed
+     * down to the child that caused it, and the reason to show. Null unless the run failed.
+     *
+     * @return array{step: string|null, code: string|null, reason: string}|null
+     */
+    public function failure(): ?array
+    {
+        if (! $this->failed()) {
+            return null;
+        }
+
+        $step = null;
+        foreach ($this->stepList() as $item) {
+            if ($item['status'] === 'failed') {
+                $step = $item['label'];
+            }
+        }
+        $code = $this->failureCode();
+
+        return ['step' => $step, 'code' => $code, 'reason' => self::reasonFor($code)];
+    }
+
+    /**
+     * A storage path that belongs to this run alone, `{directory}/{run id}/{name}`, for the file the work produces. Two runs of the
+     * same work never write over each other's output.
+     *
+     * @api
+     */
+    public function outputPath(string $name, string $directory = 'docket'): string
+    {
+        $name = trim(str_replace(['/', '\\', "\0"], '-', $name));
+
+        return trim($directory, '/').'/'.$this->id.'/'.($name === '' ? 'output' : $name);
+    }
+
     /** Whether the output may open in the browser: types a browser renders without running the file's own script. @internal */
     public function outputViewable(): bool
     {
@@ -546,7 +582,7 @@ class Run extends Model
 
         if (config()->boolean('docket.routes.enabled')) {
             $poll = url(trim(config()->string('docket.routes.prefix'), '/').'/runs/'.$this->token);
-            $links = ['poll' => $poll, 'items' => $poll.'/items', 'logs' => $poll.'/logs'];
+            $links = ['poll' => $poll, 'stream' => $poll.'/stream', 'items' => $poll.'/items', 'logs' => $poll.'/logs'];
 
             if ($this->children_total > 0) {
                 $links['children'] = $poll.'/children';
@@ -581,6 +617,7 @@ class Run extends Model
             'steps' => $this->stepList(),
             'checklist' => $this->checklist(),
             'failed_children' => $this->failedChildren(),
+            'failure' => $this->failure(),
             'progress' => $this->progress->toArray(),
             'counts' => [
                 'processed' => $this->succeeded_count + $this->failed_count + $this->skipped_count,
