@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## [0.6.7] - 2026-11-04
+
+### Security
+
+- A `shared()` run reused during an HTTP request with nobody signed in skipped the `view` policy, so a guest could be handed a run started by someone else. The guest now meets the policy through `Gate::forUser(null)`: a policy taking a non-nullable user refuses (an `AuthorizationException`), and a `?User` policy can admit guests. Console and queue processes still skip the check. A webhook (an HTTP request with no user) that should reuse a shared run must say so with `->shared(system: true)`.
+
+### Upgrade note
+
+- Webhook and other unauthenticated HTTP endpoints that rely on `shared()` reuse: add `system: true`, or give the run's policy a nullable user.
+
 ## [0.6.6] - 2026-11-04
 
 ### Security

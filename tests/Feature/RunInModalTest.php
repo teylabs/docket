@@ -10,6 +10,7 @@ use Tey\Docket\Facades\Docket;
 use Tey\Docket\Policies\RunPolicy;
 use Tey\Docket\Run;
 use Tey\Docket\RunStatus;
+use Tey\Docket\Tests\Fixtures\GuestRunPolicy;
 use Tey\Docket\Tests\Fixtures\ReadOnlyRunPolicy;
 use Tey\Docket\Tests\Fixtures\RecordWork;
 use Tey\Docket\Tests\Fixtures\User;
@@ -210,4 +211,48 @@ it('never reuses a run for unattributed callers unless it is shared', function (
 
     expect($sharedAgain->id)->toBe($shared->id)
         ->and($notShared->id)->not->toBe($shared->id);
+});
+
+/** Runs the callback as if serving an HTTP request rather than a console or queue process. */
+function asHttpRequest(Closure $callback): mixed
+{
+    $property = new ReflectionProperty(app(), 'isRunningInConsole');
+    $previous = $property->getValue(app());
+    $property->setValue(app(), false);
+
+    try {
+        return $callback();
+    } finally {
+        $property->setValue(app(), $previous);
+    }
+}
+
+it('checks a guest against the policy before reusing a shared run during an HTTP request', function (string $policy, bool $system, bool $allowed) {
+    config(['queue.default' => 'null']);
+    Gate::policy(Run::class, $policy);
+    $subject = new Workspace(['id' => 7]);
+    $start = fn () => Docket::job(new RecordWork)->name('public.report')->about($subject)->shared(system: $system)->uniqueBy('pdf')->dispatch();
+
+    $first = $start(); // the first start creates the run; only reuse is checked
+    $again = fn () => asHttpRequest($start);
+
+    if ($allowed) {
+        expect($again()->id)->toBe($first->id);
+    } else {
+        expect($again)->toThrow(AuthorizationException::class);
+    }
+})->with([
+    'guest, initiator-only policy: refused' => [RunPolicy::class, false, false],
+    'guest, policy admitting guests: allowed' => [GuestRunPolicy::class, false, true],
+    'webhook declaring system work: allowed' => [RunPolicy::class, true, true],
+]);
+
+it('lets a console or queue process reuse a shared run without a viewer to check', function () {
+    config(['queue.default' => 'null']);
+    Gate::policy(Run::class, RunPolicy::class);
+    $subject = new Workspace(['id' => 7]);
+    $start = fn () => Docket::job(new RecordWork)->name('nightly.report')->about($subject)->shared()->uniqueBy('2026-11')->dispatch();
+
+    expect(app()->runningInConsole())->toBeTrue()
+        ->and($start()->id)->toBe($start()->id);
 });

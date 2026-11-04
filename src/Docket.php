@@ -98,9 +98,9 @@ class Docket
         return $this->pending()->allowRepeat();
     }
 
-    public function shared(bool $shared = true): PendingRun
+    public function shared(bool $shared = true, bool $system = false): PendingRun
     {
-        return $this->pending()->shared($shared);
+        return $this->pending()->shared($shared, $system);
     }
 
     public function unique(): PendingRun
