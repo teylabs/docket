@@ -4,6 +4,7 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Database\Schema\Blueprint;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Gate;
+use Illuminate\Support\Facades\Route;
 use Illuminate\Support\Facades\Schema;
 use Illuminate\Support\Str;
 use Tey\Docket\Facades\Docket;
@@ -17,6 +18,7 @@ use Tey\Docket\Tests\Fixtures\User;
 use Tey\Docket\Tests\Fixtures\Workspace;
 
 use function Pest\Laravel\actingAs;
+use function Pest\Laravel\getJson;
 
 beforeEach(function () {
     foreach (['users', 'workspaces'] as $table) {
@@ -255,4 +257,23 @@ it('lets a console or queue process reuse a shared run without a viewer to check
 
     expect(app()->runningInConsole())->toBeTrue()
         ->and($start()->id)->toBe($start()->id);
+});
+
+it('refuses a guest a shared run through a real HTTP request when the policy needs a user', function () {
+    config(['queue.default' => 'null']);
+    Gate::policy(Run::class, RunPolicy::class);
+    Route::get('/docket-test/shared-report', function () {
+        $run = Docket::job(new RecordWork)->name('public.report')->about(new Workspace(['id' => 7]))->shared()->uniqueBy('pdf')->dispatch();
+
+        return ['id' => $run->id];
+    });
+
+    $first = getJson('/docket-test/shared-report')->assertOk()->json('id'); // console context: starts the run
+
+    // Testbench always reports runningInConsole(), so the request is served with the console flag cleared.
+    $response = asHttpRequest(fn () => getJson('/docket-test/shared-report'));
+
+    $response->assertForbidden();
+    expect($response->json('id'))->toBeNull()
+        ->and(Run::query()->where('name', 'public.report')->pluck('id')->all())->toBe([$first]);
 });
