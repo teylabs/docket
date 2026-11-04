@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [0.6.2] - 2026-11-04
+
 ### Added
 
 - The parent decides what a child failure means. `->required()` on a child run (`Docket::required()->run(...)`, `Docket::job($job)->required()->dispatch()`) makes its failure the parent's: the parent fails with the child's error code and params, plus `child`, the trail back to it, through any number of required levels. A child that isn't required (the default, unchanged) leaves the parent to finish `partial`. Publish and run the new migration (a `required` column). (#59)
