@@ -21,13 +21,14 @@ it('boots the provider and merges the schema and snapshot config', function () {
             'stale_after' => 3600,
             'poll_after_ms' => 2000,
             'output_link_ttl' => 600,
+            'settle_seconds' => 30,
             'stream' => ['seconds' => 60, 'heartbeat_seconds' => 15, 'check_ms' => 1000],
             'runs' => [
                 'limit' => 10, 'max_limit' => 50, 'scan' => 200, 'linger_seconds' => 30, 'max_linger_seconds' => 3600, 'failed_linger_seconds' => 600,
                 'slow_after' => 120, 'timeout_after' => null, 'idle_poll_ms' => 15000, 'help_url' => null, 'labels' => [],
                 'reasons' => ['run.stalled' => 'It stopped responding.'],
                 'copy' => [
-                    'queued' => 'Waiting to start…', 'running' => 'Working…', 'slow' => 'Taking longer than usual', 'timed_out' => 'Timed out',
+                    'queued' => 'Waiting to start…', 'running' => 'Working…', 'slow' => 'Taking longer than usual', 'timed_out' => 'Timed out', 'finishing' => 'Finishing…',
                     'succeeded' => 'Done', 'partial' => 'Finished with some problems', 'failed' => 'Something went wrong', 'cancelled' => 'Cancelled',
                     'timed_out_reason' => 'This is taking much longer than expected. It may have stopped.', 'empty' => 'Nothing running.',
                     'output' => 'Open', 'help' => 'Get help',

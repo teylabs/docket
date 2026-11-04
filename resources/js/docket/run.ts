@@ -25,17 +25,20 @@ export type DocketRun = {
     counts?: { processed: number; succeeded: number; failed: number; skipped: number };
     error?: { code: string; params: Record<string, unknown> } | null;
     output?: { name: string; mime: string; size: number } | null;
+    /** The run has its final status, but its completion callbacks (which often record the output) are still running. Keep reading. */
+    settling?: boolean;
     poll_after_ms: number | null;
     links: { poll?: string; cancel?: string; retry?: string; download?: string; view?: string; [key: string]: string | undefined };
 };
 
-export const finished = (run: Pick<DocketRun, 'status'> | null | undefined): boolean =>
-    run != null && ['succeeded', 'partial', 'failed', 'cancelled'].includes(run.status);
+/** Whether the run is over: a final status, and the server no longer reports it `settling`. */
+export const finished = (run: Pick<DocketRun, 'status' | 'settling'> | null | undefined): boolean =>
+    run != null && run.settling !== true && ['succeeded', 'partial', 'failed', 'cancelled'].includes(run.status);
 
 /** A ticket (what a controller returns) carries only the run's identity and status; a snapshot (the poll link's answer) has its progress. */
 export const isTicket = (run: DocketRun): boolean => !('progress' in run);
 
-export const succeeded = (run: Pick<DocketRun, 'status'> | null | undefined): boolean => run?.status === 'succeeded';
+export const succeeded = (run: Pick<DocketRun, 'status' | 'settling'> | null | undefined): boolean => run?.status === 'succeeded' && run.settling !== true;
 
 /** A determinate percentage only when the run knows its total; null asks for an indeterminate bar. */
 export function percent(run: DocketRun | null | undefined): number | null {

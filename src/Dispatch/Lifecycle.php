@@ -57,6 +57,8 @@ class Lifecycle
                 'cancel_requested' => false,
                 'expires_at' => $run->expires_at ?? now()->addSeconds(config()->integer('docket.ttl')),
                 'unique_key' => null,
+                // Completion callbacks and RunFinished listeners still run after this commit, and often record the output.
+                'settling' => true,
             ]);
 
             $connection->afterCommit(fn () => $this->notify($run));
@@ -67,7 +69,17 @@ class Lifecycle
         }, 5);
     }
 
+    /** Runs the completion listeners and callbacks, then marks the run settled, so a snapshot shows it complete only with what they recorded. */
     private function notify(Run $run): void
+    {
+        try {
+            $this->callbacks($run);
+        } finally {
+            Run::query()->whereKey($run->id)->where('settling', true)->update(['settling' => false, 'revision' => $run->getConnection()->raw('revision + 1')]);
+        }
+    }
+
+    private function callbacks(Run $run): void
     {
         Event::dispatch(new RunFinished($run));
         $serialized = $run->getAttribute('callbacks');

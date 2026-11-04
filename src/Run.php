@@ -65,6 +65,7 @@ use Tey\Docket\Reporting\ReportsWork;
  * @property Carbon|null $expires_at
  * @property array<string, string>|null $steps
  * @property array{url: string, label: string}|null $output_link
+ * @property bool $settling
  * @property-read Progress $progress
  */
 class Run extends Model
@@ -95,6 +96,7 @@ class Run extends Model
         'attached_children' => 0,
         'pending_children' => 0,
         'unsuccessful_children' => 0,
+        'settling' => false,
     ];
 
     /** @internal */
@@ -128,6 +130,7 @@ class Run extends Model
             'output' => 'array',
             'steps' => 'array',
             'output_link' => 'array',
+            'settling' => 'boolean',
             'total_explicit' => 'boolean',
             'dispatch_sync' => 'boolean',
             'detached' => 'boolean',
@@ -302,9 +305,11 @@ class Run extends Model
         $keys = array_map('strval', array_keys($declared));
         $current = $this->step === null ? false : array_search($this->step, $keys, true);
         $list = [];
+        $settling = $this->settling();
 
         foreach ($keys as $index => $key) {
             $status = match (true) {
+                $this->status === RunStatus::Succeeded && $settling && $index === count($keys) - 1 => 'active',
                 $this->status === RunStatus::Succeeded => 'done',
                 $current === false => 'pending',
                 $index < $current => 'done',
@@ -349,6 +354,19 @@ class Run extends Model
     public function finished(): bool
     {
         return $this->status->isFinished();
+    }
+
+    /**
+     * Whether the run has its final status but its completion callbacks and `RunFinished` listeners (which often record the
+     * output) have not finished yet. A snapshot shows such a run as `settling`: its last step stays active and clients keep
+     * reading it. Never longer than `docket.settle_seconds` after it finished, so a crashed callback cannot hold it open.
+     */
+    public function settling(): bool
+    {
+        return $this->settling
+            && $this->finished()
+            && $this->finished_at !== null
+            && $this->finished_at->copy()->addSeconds(config()->integer('docket.settle_seconds', 30))->greaterThan(now());
     }
 
     public function succeeded(): bool
@@ -484,7 +502,8 @@ class Run extends Model
             'created_at' => $this->created_at->copy()->utc()->format('Y-m-d\TH:i:s\Z'),
             'finished_at' => $this->finished_at?->copy()->utc()->format('Y-m-d\TH:i:s\Z'),
             'expires_at' => $this->expires_at?->copy()->utc()->format('Y-m-d\TH:i:s\Z'),
-            'poll_after_ms' => $this->finished() ? null : config('docket.poll_after_ms'),
+            'settling' => $this->settling(),
+            'poll_after_ms' => $this->finished() && ! $this->settling() ? null : config('docket.poll_after_ms'),
             'links' => $links,
         ];
     }

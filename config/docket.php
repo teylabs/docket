@@ -6,6 +6,7 @@ return [
     'stale_after' => 3600,
     'poll_after_ms' => 2000,
     'output_link_ttl' => 600,
+    'settle_seconds' => 30,
     'stream' => [
         'seconds' => 60,
         'heartbeat_seconds' => 15,
@@ -31,6 +32,7 @@ return [
             'running' => 'Working…',
             'slow' => 'Taking longer than usual',
             'timed_out' => 'Timed out',
+            'finishing' => 'Finishing…',
             'succeeded' => 'Done',
             'partial' => 'Finished with some problems',
             'failed' => 'Something went wrong',

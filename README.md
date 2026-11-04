@@ -1365,6 +1365,7 @@ php artisan vendor:publish --tag=docket-config
 | `ttl` | `86400` | Seconds a finished run is kept when it has no `expiresAt()`. |
 | `stale_after` | `3600` | Seconds without a report before a run fails as `run.stalled`, when the job has no `$timeout`. |
 | `poll_after_ms` | `2000` | The poll interval suggested to clients, and the reconnect delay a stream suggests. |
+| `settle_seconds` | `30` | The longest a finished run stays `settling` while its completion callbacks and listeners run. |
 | `stream.seconds` | `60` | How long one event stream stays open before it ends with `timeout` and the client reconnects. |
 | `stream.heartbeat_seconds` | `15` | How often an idle stream sends a comment line. |
 | `expired_link.url`, `expired_link.label` | `null`, `Back` | Where the expired-link page points (`null` is `/`). |

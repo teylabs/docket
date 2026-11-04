@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- A run no longer shows every step done before its result is there. The status was committed before `then()` callbacks and `RunFinished` listeners ran, and those often record the output, so a stepper could show all checks with Download and View still unavailable. A finished run is now `settling` until they finish (at most `docket.settle_seconds`, 30): the snapshot gains `settling`, keeps `poll_after_ms`, and keeps the last step `active`; streams stay open, and `finished()` and `succeeded()` in the Vue helpers wait for it. The runs list shows it as `finishing` ("Finishing…"). (#56)
+
 ### Added
 
 - Runs in progress: `GET /docket/runs?name=…` (`docket.runs`) lists the runs of one name, optionally about one subject, that are active or just finished, as display-ready rows decided on the server: label, current step, state, copy, failure reason, and output and help links. Every row passes the run's `view` policy; `Docket::runs()->scopeUsing()` narrows the query and `->describeUsing()` adjusts rows. It is bounded by `limit` and `docket.runs.scan`, and a new migration adds the indexes it reads. `GET /docket/runs/stream` pushes the list as Server-Sent Events. (#56)

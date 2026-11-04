@@ -25,7 +25,7 @@ it('serializes the exact v1 snapshot and never columns or loaded relations', fun
         'parent_run_id' => null, 'root_run_id' => null, 'retry_of_run_id' => null, 'linked_from_run_id' => null,
         'children' => ['total' => 0, 'running' => 0, 'succeeded' => 0, 'partial' => 0, 'failed' => 0],
         'created_at' => now()->utc()->format('Y-m-d\TH:i:s\Z'), 'finished_at' => null, 'expires_at' => null,
-        'poll_after_ms' => 2000, 'links' => ['poll' => $poll, 'items' => $poll.'/items', 'logs' => $poll.'/logs'],
+        'settling' => false, 'poll_after_ms' => 2000, 'links' => ['poll' => $poll, 'items' => $poll.'/items', 'logs' => $poll.'/logs'],
     ];
 
     expect($run->toArray())->toBe($expected)

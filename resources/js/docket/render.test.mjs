@@ -133,3 +133,12 @@ test('the widget compiles, and renders nothing on the server until the browser r
     assert.equal(await render(DocketRunsWidget, { filter: { name: 'report.build' }, title: 'Reports' }), '');
     assert.match(await render(DocketRunsWidget, { filter: { name: 'report.build' }, hideWhenEmpty: false }), /data-docket-runs-empty/);
 });
+
+test('a succeeded run that is still settling keeps its last step active and shows no actions state yet', async () => {
+    const settling = run({ status: 'succeeded', settling: true, poll_after_ms: 2000, steps: [{ key: 'prepare', label: 'Preparing data', status: 'done' }, { key: 'render', label: 'Rendering PDF', status: 'done' }, { key: 'save', label: 'Saving', status: 'active' }] });
+    const html = await render(DocketProgress, { run: settling, variant: 'stepper' }, { actions: ({ enabled, finished }) => h('button', { disabled: !enabled, 'data-finished': String(finished) }, 'View') });
+    assert.equal(attr(html, 'Saving'), 'active');
+    assert.match(html, /data-docket-spinner[\s\S]*Saving/);
+    assert.match(html, /data-docket-step-final data-status="pending"><button disabled data-finished="false">View<\/button>/);
+    assert.doesNotMatch(html, /data-docket-retry/);
+});

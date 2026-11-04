@@ -42,7 +42,8 @@ All timestamps are ISO 8601 UTC. Responses send `Cache-Control: private, no-stor
 | `created_at` | string | no | When the run was dispatched, or started inline. |
 | `finished_at` | string | yes | Set at the final status. Clients stop polling. |
 | `expires_at` | string | yes | When the run will be deleted; `null` while unfinished under the default TTL. |
-| `poll_after_ms` | int | yes | Suggested delay before the next poll; `null` once finished. |
+| `settling` | bool | no | The run has its final status, but its `then()`/`finally()` callbacks and `RunFinished` listeners are still running (at most `docket.settle_seconds`). The last step stays `active` and `poll_after_ms` stays set; keep reading (0.6). |
+| `poll_after_ms` | int | yes | Suggested delay before the next poll; `null` once finished and settled. |
 | `links.poll` | string | no | This snapshot. |
 | `links.items` | string | no | Cursor-paginated items; accepts `?status=`. |
 | `links.logs` | string | no | Cursor-paginated logs. |
@@ -77,7 +78,7 @@ Each row:
 | --- | --- | --- | --- |
 | `id`, `token`, `name`, `status` | string | no | As in the snapshot. |
 | `label` | string | no | `docket.runs.labels[name]`, else the run name. |
-| `state` | string | no | `queued`, `running`, `slow`, `timed_out`, `succeeded`, `partial`, `failed` or `cancelled`. |
+| `state` | string | no | `queued`, `running`, `slow`, `timed_out`, `finishing` (finished, still settling: no output link yet), `succeeded`, `partial`, `failed` or `cancelled`. |
 | `active` | bool | no | The run is unfinished (including `slow` and `timed_out`). |
 | `tone` | string | no | `neutral`, `warning`, `danger` or `success`. |
 | `message` | string | no | The copy for the state, from `docket.runs.copy`. |

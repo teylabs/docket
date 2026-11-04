@@ -57,12 +57,14 @@ class RunController
                     return;
                 }
 
-                if ($fresh->revision !== $revision || $fresh->finished()) {
+                $done = $fresh->finished() && ! $fresh->settling();
+
+                if ($fresh->revision !== $revision || $done) {
                     $revision = $fresh->revision;
                     $this->send('id: '.$fresh->revision."\nevent: snapshot\ndata: ".$fresh->toJson()."\n\n");
                 }
 
-                if ($fresh->finished()) {
+                if ($done) {
                     $this->send("event: end\ndata: {\"reason\":\"finished\"}\n\n");
 
                     return;

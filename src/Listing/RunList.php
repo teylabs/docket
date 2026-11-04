@@ -25,7 +25,7 @@ use Tey\Docket\RunStatus;
  *
  * @phpstan-type RunRow array{
  *     id: string, token: string, name: string, label: string, status: string,
- *     state: 'queued'|'running'|'slow'|'timed_out'|'succeeded'|'partial'|'failed'|'cancelled',
+ *     state: 'queued'|'running'|'slow'|'timed_out'|'finishing'|'succeeded'|'partial'|'failed'|'cancelled',
  *     active: bool, tone: 'neutral'|'warning'|'danger'|'success', message: string, reason: string|null,
  *     step: array{key: string, label: string}|null, steps: list<array{key: string, label: string, status: string, error?: string}>,
  *     progress: array{done: int, total: int|null, percent: int|null},
@@ -148,9 +148,10 @@ class RunList
         $timeoutAfter = config('docket.runs.timeout_after') ?? $run->stale_after ?? config('docket.stale_after');
         $slowAt = is_numeric($slowAfter) ? $started->copy()->addSeconds((int) $slowAfter) : null;
         $timeoutAt = is_numeric($timeoutAfter) ? $started->copy()->addSeconds((int) $timeoutAfter) : null;
-        $active = ! $run->finished();
+        $active = ! $run->finished() || $run->settling();
 
         $state = match (true) {
+            $run->finished() && $active => 'finishing',
             ! $active => $run->status->value,
             $timeoutAt !== null && $now->greaterThanOrEqualTo($timeoutAt) => 'timed_out',
             $slowAt !== null && $now->greaterThanOrEqualTo($slowAt) => 'slow',
@@ -175,7 +176,9 @@ class RunList
         }
 
         $links = [];
-        if ($run->status === RunStatus::Succeeded && is_array($run->output_link)) {
+        if ($state === 'finishing') {
+            // No output link yet: the row shows it once the run has settled.
+        } elseif ($run->status === RunStatus::Succeeded && is_array($run->output_link)) {
             $links['output'] = ['url' => $run->output_link['url'], 'label' => $run->output_link['label']];
         } elseif ($run->status === RunStatus::Succeeded && $run->output !== null && config()->boolean('docket.routes.enabled')) {
             $expires = $now->copy()->addSeconds(config()->integer('docket.output_link_ttl'));
@@ -215,7 +218,7 @@ class RunList
             'finished_at' => $finishedAt === null ? null : self::time($finishedAt),
             'slow_at' => $slowAt === null ? null : self::time($slowAt),
             'timeout_at' => $timeoutAt === null ? null : self::time($timeoutAt),
-            'linger_until' => $finishedAt === null ? null : self::time($finishedAt->copy()->addSeconds($lingerFor)),
+            'linger_until' => $finishedAt === null || $active ? null : self::time($finishedAt->copy()->addSeconds($lingerFor)),
             'links' => $links,
         ];
 

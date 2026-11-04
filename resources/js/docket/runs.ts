@@ -6,7 +6,7 @@
 import type { DocketStep } from './run';
 
 /** A row's state. `slow` and `timed_out` are active runs past the server's thresholds; the rest are run statuses. */
-export type DocketRunRowState = 'queued' | 'running' | 'slow' | 'timed_out' | 'succeeded' | 'partial' | 'failed' | 'cancelled';
+export type DocketRunRowState = 'queued' | 'running' | 'slow' | 'timed_out' | 'finishing' | 'succeeded' | 'partial' | 'failed' | 'cancelled';
 
 /** A link the server offers on a row, with its copy. `output` once the run produced a file; `help` on a timed-out or failed run. */
 export type DocketRowLink = { url: string; label: string };
