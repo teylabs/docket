@@ -1058,6 +1058,18 @@ const { run, unavailable, retry } = useDocketRun(() => props.run)
 <DocketRunModal v-model:open="building" :run="ticket" title="Building the report" variant="stepper" mode="streamed" />
 ```
 
+To draw the steps with your own checklist component (for example a kit `<Checklist>`), use the `steps` slot. It gets `items`, the snapshot's `checklist` (each step's `state` and a human `reason`), plus `enabled` and `finished`; a settling run's last step stays `active`, so the checklist is never complete before the result is there:
+
+```vue
+<DocketRunModal v-model:open="building" :run="ticket" title="Building the report" variant="stepper">
+  <template #steps="{ items, download }">
+    <Checklist :items="items" label="Building the report">
+      <template #actions="{ complete }"><Button :disabled="!complete" @click="download">Download</Button></template>
+    </Checklist>
+  </template>
+</DocketRunModal>
+```
+
 The components stay unstyled: style the `data-docket-step`, `data-docket-spinner`, `data-docket-check` and `data-docket-step-error` hooks. The spinner animates through SVG, without a stylesheet.
 
 ### Streamed Mode

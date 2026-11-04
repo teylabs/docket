@@ -42,6 +42,7 @@ All timestamps are ISO 8601 UTC. Responses send `Cache-Control: private, no-stor
 | `created_at` | string | no | When the run was dispatched, or started inline. |
 | `finished_at` | string | yes | Set at the final status. Clients stop polling. |
 | `expires_at` | string | yes | When the run will be deleted; `null` while unfinished under the default TTL. |
+| `checklist` | array | no | The steps as checklist items: `[{ key, label, state, detail, reason, required, action }]`; `state` is the step status and `reason` the failure reason text (`docket.runs.reasons`, else the code). `[]` without declared steps (0.6). |
 | `settling` | bool | no | The run has its final status, but its `then()`/`finally()` callbacks and `RunFinished` listeners are still running (at most `docket.settle_seconds`). The last step stays `active` and `poll_after_ms` stays set; keep reading (0.6). |
 | `poll_after_ms` | int | yes | Suggested delay before the next poll; `null` once finished and settled. |
 | `links.poll` | string | no | This snapshot. |

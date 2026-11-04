@@ -19,7 +19,7 @@ it('serializes the exact v1 snapshot and never columns or loaded relations', fun
 
     $expected = [
         'schema_version' => 1, 'id' => $run->id, 'token' => $run->token, 'name' => 'rows.import', 'status' => 'running',
-        'revision' => 1, 'step' => 'validate', 'steps' => [], 'progress' => ['done' => 340, 'total' => 1200, 'percent' => 28],
+        'revision' => 1, 'step' => 'validate', 'steps' => [], 'checklist' => [], 'progress' => ['done' => 340, 'total' => 1200, 'percent' => 28],
         'counts' => ['processed' => 10, 'succeeded' => 6, 'failed' => 3, 'skipped' => 1],
         'error' => null, 'result' => null, 'output' => null, 'partial' => [], 'cancel_requested' => false,
         'parent_run_id' => null, 'root_run_id' => null, 'retry_of_run_id' => null, 'linked_from_run_id' => null,

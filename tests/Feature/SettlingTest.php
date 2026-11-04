@@ -61,3 +61,16 @@ it('leaves runs from before the migration settled', function () {
     expect($run->refresh()->settling())->toBeFalse()
         ->and($run->toArray()['settling'])->toBeFalse();
 });
+
+it('sends the steps as checklist items, with the failure reason as text and the last step active while settling', function () {
+    config(['docket.runs.reasons' => ['report.render_failed' => 'The renderer timed out.']]);
+    $run = Run::create(['name' => 'r', 'status' => RunStatus::Failed, 'finished_at' => now(), 'steps' => ['prepare' => 'Preparing', 'render' => 'Rendering'], 'step' => 'render', 'error' => ['code' => 'report.render_failed', 'params' => []]]);
+
+    expect($run->toArray()['checklist'])->toBe([
+        ['key' => 'prepare', 'label' => 'Preparing', 'state' => 'done', 'detail' => null, 'reason' => null, 'required' => true, 'action' => null],
+        ['key' => 'render', 'label' => 'Rendering', 'state' => 'failed', 'detail' => null, 'reason' => 'The renderer timed out.', 'required' => true, 'action' => null],
+    ]);
+
+    $run->update(['status' => RunStatus::Succeeded, 'error' => null, 'settling' => true]);
+    expect(array_column($run->refresh()->checklist(), 'state'))->toBe(['done', 'active']);
+});

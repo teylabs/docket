@@ -163,3 +163,11 @@ test('steps take the caller\'s labels, and the current label comes from the acti
     assert.equal(currentStepLabel(run()), null);
     assert.deepEqual(stepList(null), []);
 });
+
+test('checklist items come from the server, or are mapped from steps for an older server', async () => {
+    const { checklistItems } = await import('./run.ts');
+    const sent = [{ key: 'a', label: 'A', state: 'active', detail: null, reason: null, required: true, action: null }];
+    assert.deepEqual(checklistItems(run({ checklist: sent })), sent);
+    assert.deepEqual(checklistItems(run({ steps: [{ key: 'a', label: 'A', status: 'failed', error: 'x.y' }] })), [{ key: 'a', label: 'A', state: 'failed', detail: null, reason: 'x.y', required: true, action: null }]);
+    assert.deepEqual(checklistItems(null), []);
+});

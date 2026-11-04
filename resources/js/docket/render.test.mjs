@@ -142,3 +142,17 @@ test('a succeeded run that is still settling keeps its last step active and show
     assert.match(html, /data-docket-step-final data-status="pending"><button disabled data-finished="false">View<\/button>/);
     assert.doesNotMatch(html, /data-docket-retry/);
 });
+
+test('the stepper hands the server\'s checklist items to a steps slot, so an app can draw them with its own checklist', async () => {
+    const checklist = [
+        { key: 'prepare', label: 'Preparing data', state: 'done', detail: null, reason: null, required: true, action: null },
+        { key: 'render', label: 'Rendering PDF', state: 'failed', detail: null, reason: 'The renderer timed out.', required: true, action: null },
+    ];
+    const seen = [];
+    const html = await render(DocketProgress, { run: run({ status: 'failed', checklist }), variant: 'stepper' }, { steps: props => (seen.push(props), h('ol', { 'data-host-checklist': '' }, props.items.map(item => h('li', { 'data-state': item.state }, `${item.label} ${item.reason ?? ''}`)))) });
+    assert.deepEqual(seen[0].items, checklist);
+    assert.equal(seen[0].enabled, false);
+    assert.equal(seen[0].finished, true);
+    assert.match(html, /data-host-checklist[\s\S]*data-state="failed">Rendering PDF The renderer timed out./);
+    assert.doesNotMatch(html, /data-docket-steps/);
+});

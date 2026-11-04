@@ -12,6 +12,17 @@ export type DocketStep = { key: string; label: string; status: DocketStepStatus;
 /** How a progress component looks: `bar` (the default), `stepper` (every step listed) or `minimal` (a spinner and the current step). */
 export type DocketVariant = 'bar' | 'stepper' | 'minimal';
 
+/** A step in the checklist shape: `state` is the step status, `reason` the server's failure reason. */
+export type DocketChecklistItem = {
+    key: string;
+    label: string;
+    state: 'pending' | 'active' | 'done' | 'failed' | 'skipped';
+    detail: string | null;
+    reason: string | null;
+    required: boolean;
+    action: { label: string; url?: string | null; name?: string | null } | null;
+};
+
 export type DocketRun = {
     schema_version: number;
     id: string;
@@ -25,6 +36,8 @@ export type DocketRun = {
     counts?: { processed: number; succeeded: number; failed: number; skipped: number };
     error?: { code: string; params: Record<string, unknown> } | null;
     output?: { name: string; mime: string; size: number } | null;
+    /** The steps as checklist items, ready for a server-driven checklist component (kit's `<Checklist :items>`). Since 0.6. */
+    checklist?: DocketChecklistItem[];
     /** The run has its final status, but its completion callbacks (which often record the output) are still running. Keep reading. */
     settling?: boolean;
     poll_after_ms: number | null;
@@ -244,4 +257,14 @@ export function currentStepLabel(run: DocketRun | null | undefined, labels: Reco
     if (current) return current.label;
 
     return run?.step ? labels[run.step] ?? run.step : null;
+}
+
+/**
+ * The run's steps as checklist items: the server's `checklist` when sent, else its `steps` mapped (`state` is `status`, `reason`
+ * is `error`) for a server older than 0.6. Empty when the work declared none.
+ */
+export function checklistItems(run: DocketRun | null | undefined): DocketChecklistItem[] {
+    if (run?.checklist) return run.checklist;
+
+    return (run?.steps ?? []).map(step => ({ key: step.key, label: step.label, state: step.status, detail: null, reason: step.error ?? null, required: true, action: null }));
 }

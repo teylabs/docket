@@ -329,6 +329,28 @@ class Run extends Model
         return $list;
     }
 
+    /**
+     * The declared steps as checklist items, the shape a server-driven checklist component draws (`key`, `label`, `state`, `detail`,
+     * `reason`, `required`, `action`): `state` is the step's status, and `reason` is the failure reason for the error code from
+     * `docket.runs.reasons`, else the code. Empty when the work declared no steps.
+     *
+     * @return list<array{key: string, label: string, state: string, detail: null, reason: string|null, required: true, action: null}>
+     */
+    public function checklist(): array
+    {
+        $reasons = config()->array('docket.runs.reasons', []);
+
+        return array_map(fn (array $step): array => [
+            'key' => $step['key'],
+            'label' => $step['label'],
+            'state' => $step['status'],
+            'detail' => null,
+            'reason' => isset($step['error']) ? (is_string($reasons[$step['error']] ?? null) ? $reasons[$step['error']] : $step['error']) : null,
+            'required' => true,
+            'action' => null,
+        ], $this->stepList());
+    }
+
     /** Whether the output may open in the browser: types a browser renders without running the file's own script. @internal */
     public function outputViewable(): bool
     {
@@ -475,6 +497,7 @@ class Run extends Model
             'revision' => $this->revision,
             'step' => $this->step,
             'steps' => $this->stepList(),
+            'checklist' => $this->checklist(),
             'progress' => $this->progress->toArray(),
             'counts' => [
                 'processed' => $this->succeeded_count + $this->failed_count + $this->skipped_count,
