@@ -5,10 +5,13 @@ use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Schema;
 use Tey\Docket\Exceptions\RunFailed;
 use Tey\Docket\Facades\Docket;
+use Tey\Docket\Policies\RunPolicy;
 use Tey\Docket\Run;
 use Tey\Docket\RunStatus;
 use Tey\Docket\Tests\Fixtures\ReadOnlyRunPolicy;
+use Tey\Docket\Tests\Fixtures\User;
 
+use function Pest\Laravel\actingAs;
 use function Pest\Laravel\artisan;
 
 beforeEach(function () {
@@ -95,3 +98,19 @@ it('rolls a required failure up through every required level, and stops at an op
             ->and($root->toArray()['failed_children'][0]['code'])->toBe('render.failed');
     }
 })->with(['required middle' => true, 'optional middle' => false]);
+
+it('lists failed children for the list\'s viewer, not the signed-in user', function (bool $signedIn) {
+    Gate::policy(Run::class, RunPolicy::class);
+    $viewer = new User(['id' => 1]);
+    $root = Run::create(['name' => 'intake', 'status' => RunStatus::Partial, 'finished_at' => now(), 'children_failed' => 1, 'initiator_type' => User::class, 'initiator_id' => '1']);
+    $visible = Run::create(['name' => 'reading', 'status' => RunStatus::Failed, 'finished_at' => now(), 'parent_run_id' => $root->id, 'root_run_id' => $root->id, 'initiator_type' => User::class, 'initiator_id' => '1']);
+    Run::create(['name' => 'attaching', 'status' => RunStatus::Failed, 'finished_at' => now(), 'parent_run_id' => $root->id, 'root_run_id' => $root->id, 'initiator_type' => User::class, 'initiator_id' => '2']);
+    if ($signedIn) {
+        actingAs(new User(['id' => 2]));
+    }
+
+    $row = Docket::runs()->rows(['name' => 'intake'], $viewer)[0];
+
+    expect(array_column($row['failed_children'], 'id'))->toBe([$visible->id])
+        ->and(array_column($root->failedChildren($viewer), 'id'))->toBe([$visible->id]);
+})->with(['another user signed in' => true, 'nobody signed in' => false]);

@@ -328,7 +328,7 @@ Docket::run('intake.email', function () use ($message) {
 });
 ```
 
-A child that isn't required (the default) leaves the parent to finish `partial`. Either way the snapshot and the runs list carry `failed_children` (`id`, `name`, `label`, `required`, `code`, `reason`), and the `checklist` adds each failed optional child as a `skipped`, `required: false` item with its reason, so a checklist shows "done with problems" and stays complete. An uncaught exception from an inline child still fails the parent as before (`run.child_failed`), since the parent's own code stopped; mark the child required to roll its code up instead.
+A child that isn't required (the default) leaves the parent to finish `partial`. `required` defaults to `false`, so children started before upgrading to 0.6.2, including ones in flight at deploy, count as optional. Either way the snapshot and the runs list carry `failed_children` (`id`, `name`, `label`, `required`, `code`, `reason`), and the `checklist` adds each failed optional child as a `skipped`, `required: false` item with its reason, so a checklist shows "done with problems" and stays complete. An uncaught exception from an inline child still fails the parent as before (`run.child_failed`), since the parent's own code stopped; mark the child required to roll its code up instead.
 
 ### Depth, Links and Continuation
 

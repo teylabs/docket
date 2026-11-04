@@ -2,6 +2,16 @@
 
 ## Unreleased
 
+## [0.6.3] - 2026-11-04
+
+### Fixed
+
+- `failed_children` checked each child's `view` policy against the signed-in user, while the runs list checks its given viewer. `Run::failedChildren(?Authenticatable $viewer)` and `RunList::row(..., $viewer)` now take the viewer, so list rows and stream ticks check the same user as the rest of the row; snapshots still use the signed-in user, as their links do. (#60)
+
+### Upgrade note
+
+- `required` defaults to `false`, and the 0.6.2 migration gives existing rows `false`. Children dispatched before you upgrade, including ones still in flight at deploy, count as optional: if they fail, their parent finishes `partial` rather than failed. Only children started with `->required()` after the upgrade fail their parent. (#60)
+
 ## [0.6.2] - 2026-11-04
 
 ### Added
