@@ -245,6 +245,8 @@ it('waits for the outer commit and records rollback without queuing work', funct
 });
 
 it('reuses only unfinished runs with the same name and subject for unique dispatches', function () {
+    signInAs(); // reuse is per initiator: an unattributed dispatch always starts fresh
+
     $first = Upload::create();
     $second = Upload::create();
     $ticket = Docket::job(new RecordWork)->name('import')->about($first)->unique()->dispatch();
@@ -258,6 +260,8 @@ it('reuses only unfinished runs with the same name and subject for unique dispat
 });
 
 it('reuses idempotency keys through completion until expiry and ignores null keys', function () {
+    signInAs(); // reuse is per initiator: an unattributed dispatch always starts fresh
+
     freezeTime();
     $ticket = Docket::job(new RecordWork)->name('import')->idempotencyKey('request:1')->expiresAt(now()->addMinute())->dispatch();
     artisan('queue:work', ['--stop-when-empty' => true, '--sleep' => 0])->assertSuccessful();
@@ -340,6 +344,8 @@ it('uses configured staleness and counts keyed batch members with chains as one 
 });
 
 it('reuses an unfinished run even when the original dispatch did not request uniqueness', function () {
+    signInAs(); // reuse is per initiator: an unattributed dispatch always starts fresh
+
     $ticket = Docket::job(new RecordWork)->name('import')->dispatch();
     expect(Docket::job(new RecordWork)->name('import')->unique()->dispatch()->id)->toBe($ticket->id)
         ->and(Queue::size())->toBe(1);

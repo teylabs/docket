@@ -29,6 +29,7 @@ beforeEach(function () {
 });
 
 it('starts a run once and hands back the active one on a repeat, scoped by its extra values', function () {
+    actingAs(new User(['id' => 1]));
     config(['queue.default' => 'null']);
     $first = Docket::job(new RecordWork)->name('report.preview')->uniqueBy('pdf', 2026)->dispatch();
     $again = Docket::job(new RecordWork)->name('report.preview')->uniqueBy('pdf', 2026)->dispatch();
@@ -46,6 +47,7 @@ it('starts a run once and hands back the active one on a repeat, scoped by its e
 });
 
 it('never creates a second run when another request starts the same one at the same moment', function () {
+    actingAs(new User(['id' => 1]));
     config(['queue.default' => 'null']);
     $database = config('database.connections.testing');
     config(['database.connections.racer' => $database]);
@@ -159,4 +161,53 @@ it('refuses a snapshot prop for a run the signed-in user may not view', function
     actingAs(new User(['id' => 2]));
     expect(fn () => $ticket->snapshot())->toThrow(AuthorizationException::class)
         ->and(fn () => Docket::snapshot($ticket->run()))->toThrow(AuthorizationException::class);
+});
+
+it('keeps an idempotency key per user unless the run is shared, and honours a key stored before the upgrade for its own user', function () {
+    config(['queue.default' => 'null']);
+    Gate::policy(Run::class, ReadOnlyRunPolicy::class);
+    $start = function (int $user, bool $shared = false) {
+        actingAs(new User(['id' => $user]));
+        $pending = Docket::job(new RecordWork)->name($shared ? 'import.shared' : 'import')->idempotencyKey('request:1');
+
+        return ($shared ? $pending->shared() : $pending)->dispatch();
+    };
+
+    $alice = $start(1);
+    expect($start(1)->id)->toBe($alice->id)
+        ->and($start(2)->id)->not->toBe($alice->id);
+
+    $shared = $start(1, true);
+    expect($start(2, true)->id)->toBe($shared->id)
+        ->and($shared->id)->not->toBe($alice->id);
+
+    $legacy = Run::create(['name' => 'export', 'idempotency_key' => hash('sha256', serialize(['export', 'request:9'])), 'initiator_type' => User::class, 'initiator_id' => '1']);
+    actingAs(new User(['id' => 1]));
+    expect(Docket::job(new RecordWork)->name('export')->idempotencyKey('request:9')->dispatch()->id)->toBe($legacy->id);
+    actingAs(new User(['id' => 2]));
+    expect(Docket::job(new RecordWork)->name('export')->idempotencyKey('request:9')->dispatch()->id)->not->toBe($legacy->id);
+});
+
+it('never reuses a run for unattributed callers unless it is shared', function () {
+    config(['queue.default' => 'null']);
+    Gate::policy(Run::class, RunPolicy::class);
+
+    // Two guests (or a command and a webhook) with no subject: separate runs, and no exception.
+    $first = Docket::job(new RecordWork)->name('nightly.sync')->unique()->dispatch();
+    $second = Docket::job(new RecordWork)->name('nightly.sync')->unique()->dispatch();
+    $keyed = Docket::job(new RecordWork)->name('nightly.sync')->idempotencyKey('hook:1')->dispatch();
+    $keyedAgain = Docket::job(new RecordWork)->name('nightly.sync')->idempotencyKey('hook:1')->dispatch();
+
+    expect($second->id)->not->toBe($first->id)
+        ->and($keyedAgain->id)->not->toBe($keyed->id)
+        ->and(Run::query()->whereNotNull('unique_key')->orWhereNotNull('idempotency_key')->count())->toBe(0);
+
+    // A system dispatch that needs de-duplication says so: shared, with a subject and a scope.
+    $subject = new Workspace(['id' => 7]);
+    $shared = Docket::job(new RecordWork)->name('nightly.sync')->about($subject)->shared()->uniqueBy('2026-11')->dispatch();
+    $sharedAgain = Docket::job(new RecordWork)->name('nightly.sync')->about($subject)->shared()->uniqueBy('2026-11')->dispatch();
+    $notShared = Docket::job(new RecordWork)->name('nightly.sync')->about($subject)->uniqueBy('2026-11')->dispatch();
+
+    expect($sharedAgain->id)->toBe($shared->id)
+        ->and($notShared->id)->not->toBe($shared->id);
 });

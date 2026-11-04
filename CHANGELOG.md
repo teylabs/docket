@@ -2,6 +2,18 @@
 
 ## Unreleased
 
+## [0.6.6] - 2026-11-04
+
+### Security
+
+- `idempotencyKey()` was keyed by run name and key only, so two users sending the same key got one run. The key is now per initiator, like start-or-reuse, unless the run is `shared()`. (#63)
+- With no initiator (a guest, a command, a job, a webhook), every caller shared one start-or-reuse identity, so `unique()` reused runs across guests, and across tenants when there was no subject. An unattributed dispatch that isn't `shared()` now never reuses: it starts a fresh run, without throwing, for both `unique()`/`uniqueBy()` and `idempotencyKey()`. (#63)
+
+### Upgrade note
+
+- An idempotency key stored before 0.6.6 is still honoured, but only for the user who used it.
+- Unattributed callers (commands, jobs, webhooks, guest requests) that relied on `unique()` or `idempotencyKey()` to de-duplicate must now add `->shared()`, with a subject and/or a `uniqueBy()` scope that fits. A shared run is handed to a signed-in initiator only if the `view` policy admits them. A system dispatch has no viewer, so it skips that check; viewers still meet the policy in `snapshot()` and the package routes. (#63)
+
 ## [0.6.5] - 2026-11-04
 
 ### Security
