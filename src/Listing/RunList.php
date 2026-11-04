@@ -134,7 +134,7 @@ class RunList
                     continue;
                 }
 
-                $row = $this->row($run, $linger, $now);
+                $row = $this->row($run, $linger, $now, $viewer);
 
                 if (is_string($row['linger_until']) && Carbon::parse($row['linger_until'])->lessThan($now)) {
                     continue;
@@ -175,7 +175,7 @@ class RunList
      *
      * @return array<string, mixed>
      */
-    public function row(Run $run, ?int $linger = null, ?Carbon $now = null): array
+    public function row(Run $run, ?int $linger = null, ?Carbon $now = null, ?Authenticatable $viewer = null): array
     {
         $now ??= now();
         $linger ??= config()->integer('docket.runs.linger_seconds', 30);
@@ -248,7 +248,7 @@ class RunList
             'message' => $this->copy($state),
             'reason' => $reason,
             'code' => in_array($run->status, [RunStatus::Failed, RunStatus::Partial], true) ? $run->failureCode() : null,
-            'failed_children' => $run->failedChildren(),
+            'failed_children' => $run->failedChildren($viewer),
             'step' => $current,
             'steps' => $steps,
             'progress' => $run->progress->toArray(),

@@ -402,13 +402,13 @@ class Run extends Model
     }
 
     /**
-     * The direct, attached children that failed, oldest failure first and at most 20, that the current viewer may view: each with
+     * The direct, attached children that failed, oldest failure first and at most 20, that the viewer may view (the given one, else the signed-in user): each with
      * its name, label, whether it was required, its error code (followed down its own tree) and the reason to show. Empty for most
      * runs: it reads nothing unless a child failed.
      *
      * @return list<array{id: string, name: string, label: string, required: bool, code: string|null, reason: string}>
      */
-    public function failedChildren(): array
+    public function failedChildren(?Authenticatable $viewer = null): array
     {
         if ($this->children_failed === 0) {
             return [];
@@ -418,7 +418,7 @@ class Run extends Model
 
         return array_values($this->children()->where('status', RunStatus::Failed)->where('detached', false)
             ->orderBy('finished_at')->orderBy('id')->limit(20)->get()
-            ->filter(fn (Run $child) => Gate::allows('view', $child))
+            ->filter(fn (Run $child) => $viewer === null ? Gate::allows('view', $child) : Gate::forUser($viewer)->allows('view', $child))
             ->map(function (Run $child) use ($labels): array {
                 $code = $child->failureCode();
 
