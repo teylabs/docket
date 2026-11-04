@@ -1,0 +1,11 @@
+{
+    "private": true,
+    "description": "Development only: renders the published Vue components in tests. Not shipped to applications.",
+    "type": "module",
+    "scripts": {
+        "test": "node --test --experimental-strip-types resources/js/docket/*.test.mjs"
+    },
+    "devDependencies": {
+        "vue": "^3.5.0"
+    }
+}

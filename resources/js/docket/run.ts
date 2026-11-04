@@ -4,6 +4,14 @@
  */
 export type DocketStatus = 'queued' | 'running' | 'succeeded' | 'partial' | 'failed' | 'cancelled';
 
+export type DocketStepStatus = 'pending' | 'active' | 'done' | 'failed';
+
+/** One of the steps the work declared up front (`$run->steps([...])`), with where the run is. */
+export type DocketStep = { key: string; label: string; status: DocketStepStatus; error?: string };
+
+/** How a progress component looks: `bar` (the default), `stepper` (every step listed) or `minimal` (a spinner and the current step). */
+export type DocketVariant = 'bar' | 'stepper' | 'minimal';
+
 export type DocketRun = {
     schema_version: number;
     id: string;
@@ -12,6 +20,7 @@ export type DocketRun = {
     status: DocketStatus;
     revision: number;
     step?: string | null;
+    steps?: DocketStep[];
     progress?: { done: number; total: number | null; percent: number | null };
     counts?: { processed: number; succeeded: number; failed: number; skipped: number };
     error?: { code: string; params: Record<string, unknown> } | null;
@@ -199,4 +208,17 @@ export function openStream(
     connect();
 
     return close;
+}
+
+/** The run's declared steps, each label replaced by the caller's own for that key when given. Empty when the work declared none. */
+export function stepList(run: DocketRun | null | undefined, labels: Record<string, string> = {}): DocketStep[] {
+    return (run?.steps ?? []).map(step => ({ ...step, label: labels[step.key] ?? step.label }));
+}
+
+/** The label of the step the run is on: the active (or failed) declared step, else its `step` key through `labels`; null before any step. */
+export function currentStepLabel(run: DocketRun | null | undefined, labels: Record<string, string> = {}): string | null {
+    const current = stepList(run, labels).find(step => step.status === 'active' || step.status === 'failed');
+    if (current) return current.label;
+
+    return run?.step ? labels[run.step] ?? run.step : null;
 }

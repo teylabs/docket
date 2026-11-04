@@ -54,6 +54,18 @@ class FakeRun extends Run
         return $this->record('step', $label);
     }
 
+    /** @param  array<string, string>  $steps */
+    public function steps(array $steps): static
+    {
+        if ($steps === [] || count($steps) > 50) {
+            throw new InvalidArgumentException('Declare between 1 and 50 steps.');
+        }
+
+        $this->steps = $steps;
+
+        return $this->record('steps', $steps);
+    }
+
     public function total(int $units): static
     {
         if ($units < 0) {

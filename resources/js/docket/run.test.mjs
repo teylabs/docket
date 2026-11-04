@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { ensureDownloadFrame, isTicket, claimAutoDownload, finished, formFields, freshDownloadLink, newer, nextDelay, openStream, percent, streamUrl, submitDownload } from './run.ts';
+import { currentStepLabel, stepList, ensureDownloadFrame, isTicket, claimAutoDownload, finished, formFields, freshDownloadLink, newer, nextDelay, openStream, percent, streamUrl, submitDownload } from './run.ts';
 
 const run = (overrides = {}) => ({ schema_version: 1, id: 'r1', token: 't', name: 'build', status: 'running', revision: 1, poll_after_ms: 2000, links: {}, ...overrides });
 
@@ -152,4 +152,14 @@ test('closing the stream stops it without a fallback', () => {
     source().onerror({});
     assert.equal(source().closed, true);
     assert.equal(seen.fallbacks, 0);
+});
+
+test('steps take the caller\'s labels, and the current label comes from the active or failed step', () => {
+    const steps = [{ key: 'prepare', label: 'Preparing', status: 'done' }, { key: 'render', label: 'Rendering', status: 'active' }];
+    assert.deepEqual(stepList(run({ steps }), { render: 'Drawing' }).map(s => s.label), ['Preparing', 'Drawing']);
+    assert.equal(currentStepLabel(run({ steps })), 'Rendering');
+    assert.equal(currentStepLabel(run({ steps: [{ ...steps[0] }, { ...steps[1], status: 'failed' }] })), 'Rendering');
+    assert.equal(currentStepLabel(run({ step: 'resize' }), { resize: 'Resizing images' }), 'Resizing images');
+    assert.equal(currentStepLabel(run()), null);
+    assert.deepEqual(stepList(null), []);
 });

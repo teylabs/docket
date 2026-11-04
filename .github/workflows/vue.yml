@@ -24,5 +24,8 @@ jobs:
         with:
           node-version: '24'
 
-      - name: Test the snapshot helpers
-        run: node --test --experimental-strip-types resources/js/docket/*.test.mjs
+      - name: Install the development renderer
+        run: npm ci
+
+      - name: Test the snapshot helpers and render the components
+        run: npm test
