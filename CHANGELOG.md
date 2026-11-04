@@ -7,6 +7,7 @@
 ### Added
 
 - Streamed mode: `GET /docket/runs/{token}/stream` pushes the run's snapshot as Server-Sent Events whenever its revision changes, with a heartbeat comment, `X-Accel-Buffering: no` and an `end` event when the run finishes or after `docket.stream.seconds` (60). It runs the same `view` policy as the snapshot. `useDocketRun(source, { mode: 'streamed' })` and `<DocketRunModal mode="streamed">` follow it, reconnect after a timeout and fall back to polling on any stream error or when `EventSource` is missing. Polling stays the default. (#52)
+- A browser that opens an expired or invalid output link sees a short "This link has expired" page (403) with a way back, set by `docket.expired_link.url` and `.label`; publish the view with `--tag=docket-views`. JSON requests keep the JSON error. (#52)
 
 ## [0.3.0] - 2026-11-03
 

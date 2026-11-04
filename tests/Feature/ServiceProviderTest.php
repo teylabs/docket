@@ -4,6 +4,7 @@ use Illuminate\Routing\RouteCollection;
 use Illuminate\Support\Facades\Gate;
 use Illuminate\Support\Facades\Route;
 use Tey\Docket\DocketServiceProvider;
+use Tey\Docket\Http\OutputSignature;
 use Tey\Docket\Http\RunRequest;
 use Tey\Docket\Run;
 use Tey\Docket\Tests\Fixtures\ReadOnlyRunPolicy;
@@ -22,6 +23,7 @@ it('boots the provider and merges the schema and snapshot config', function () {
             'output_link_ttl' => 600,
             'stream' => ['seconds' => 60, 'heartbeat_seconds' => 15, 'check_ms' => 1000],
             'max_depth' => 10,
+            'expired_link' => ['url' => null, 'label' => 'Back'],
             'routes' => ['enabled' => true, 'prefix' => 'docket', 'middleware' => ['web']],
         ]);
 });
@@ -82,7 +84,7 @@ it('registers only the six JSON routes, the event stream and the two signed outp
         $cacheable->add($route);
     }
     expect($cacheable->compile()['attributes'])->toHaveKeys(['docket.show', 'docket.stream', 'docket.items', 'docket.logs', 'docket.children', 'docket.cancel', 'docket.retry', 'docket.output', 'docket.output.view']);
-    expect($routes->filter(fn ($route) => str_starts_with($route->getName(), 'docket.output'))->every(fn ($route) => in_array('signed:relative', $route->gatherMiddleware(), true)))->toBeTrue();
+    expect($routes->filter(fn ($route) => str_starts_with($route->getName(), 'docket.output'))->every(fn ($route) => in_array(OutputSignature::class, $route->gatherMiddleware(), true)))->toBeTrue();
     getJson('/docket/runs/unknown/watch')->assertNotFound();
 });
 

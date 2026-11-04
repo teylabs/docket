@@ -12,6 +12,10 @@ return [
         'check_ms' => 1000,
     ],
     'max_depth' => 10,
+    'expired_link' => [
+        'url' => null,
+        'label' => 'Back',
+    ],
     'routes' => [
         'enabled' => true,
         'prefix' => 'docket',
