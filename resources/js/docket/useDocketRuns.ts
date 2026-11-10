@@ -64,9 +64,12 @@ export function useDocketRuns(filter: MaybeRefOrGetter<DocketRunFilter>, options
 
     const accept = (incoming: DocketRunList) => {
         skew = clockSkew(incoming);
-        now.value = Date.now();
-        // An unchanged answer (the usual idle poll) keeps the same list, so nothing downstream re-renders.
-        if (!sameList(list.value, incoming)) list.value = incoming;
+        // An unchanged answer (the usual idle poll) keeps the same list and clock, so nothing downstream re-renders.
+        // A lingering row still drops off on time: the linger timeout advances the clock itself.
+        if (!sameList(list.value, incoming)) {
+            now.value = Date.now();
+            list.value = incoming;
+        }
         tick();
     };
 
