@@ -52,7 +52,11 @@ export function useDocketRuns(filter: MaybeRefOrGetter<DocketRunFilter>, options
     const tick = () => {
         stopClock();
         if (doc?.hidden) return;
-        const delay = nextLingerDelay(list.value?.runs ?? [], Date.now(), skew);
+        const runs = list.value?.runs ?? [];
+        const at = Date.now();
+        // A row whose linger ran out before its timeout fired (a poll landed in between) drops off now.
+        if (visibleRows(runs, now.value, skew).length !== visibleRows(runs, at, skew).length) now.value = at;
+        const delay = nextLingerDelay(runs, at, skew);
         if (delay !== null) {
             clock = setTimeout(() => {
                 clock = null;
