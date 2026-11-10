@@ -1,7 +1,7 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { clockSkew, nextListDelay, runsUrl, visibleRows } from './runs.ts';
+import { clockSkew, nextLingerDelay, nextListDelay, runsUrl, sameList, visibleRows } from './runs.ts';
 import { openEventStream } from './run.ts';
 
 // The same list the PHP suite checks against RunList's real output (tests/Feature/RunListTest.php).
@@ -55,4 +55,32 @@ test('the list stream uses the run transport: runs events in, reconnect on timeo
     assert.deepEqual(seen.lists, [list]);
     assert.equal(seen.fallbacks, 1);
     assert.equal(openEventStream('/x', 'runs', { message() {}, fallback() {} }, undefined), null);
+});
+
+const lingering = (id, lingerUntil) => ({ id, state: lingerUntil ? 'succeeded' : 'running', linger_until: lingerUntil });
+const answer = (runs, active = false) => ({ schema_version: 1, runs, active, empty: 'Nothing yet', poll_after_ms: active ? 2000 : 15000, generated_at: '2026-01-01T00:00:00Z' });
+const start = Date.parse('2026-01-01T00:00:00Z');
+
+test('an idle list with no lingering row needs no clock', () => {
+    assert.equal(nextLingerDelay([], start), null);
+    assert.equal(nextLingerDelay([lingering(1, null)], start), null);
+    assert.equal(nextLingerDelay([lingering(1, '2025-12-31T23:59:00Z')], start), null);
+});
+
+test('the clock wakes once, when the soonest lingering row drops off', () => {
+    const rows = [lingering(1, '2026-01-01T00:00:30Z'), lingering(2, '2026-01-01T00:00:10Z'), lingering(3, null)];
+    const delay = nextLingerDelay(rows, start);
+    assert.ok(delay >= 10_000 && delay < 11_000, `delay ${delay}`);
+    assert.deepEqual(visibleRows(rows, start + delay).map(row => row.id), [1, 3]);
+});
+
+test('the linger delay reads server time through the skew', () => {
+    assert.ok(nextLingerDelay([lingering(1, '2026-01-01T00:00:10Z')], start, 5_000) < 6_000);
+});
+
+test('an unchanged idle answer counts as the same list, a new run does not', () => {
+    assert.equal(sameList(answer([]), { ...answer([]), generated_at: '2026-01-01T00:00:15Z' }), true);
+    assert.equal(sameList(answer([]), answer([lingering(9, null)], true)), false);
+    assert.equal(sameList(answer([]), { ...answer([]), poll_after_ms: 2000 }), false);
+    assert.equal(sameList(null, answer([])), false);
 });
