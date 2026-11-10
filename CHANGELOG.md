@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- `useDocketRuns` no longer runs a 1 s timer. It schedules one timeout to the soonest finished row's `linger_until`, keeps no timer while nothing lingers or the tab is hidden (resuming when it is shown), and keeps the current list when a poll returns the same rows and cadence, so an idle list doesn't re-render. (#66)
+
 ## [0.6.7] - 2026-11-04
 
 ### Security

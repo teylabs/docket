@@ -83,6 +83,24 @@ export const clockSkew = (list: Pick<DocketRunList, 'generated_at'>, receivedAt:
 export const visibleRows = (rows: DocketRunRow[], now: number = Date.now(), skew = 0): DocketRunRow[] =>
     rows.filter(row => row.linger_until === null || Date.parse(row.linger_until) > now + skew);
 
+/**
+ * How long until the next lingering row drops off (server time read through `skew`), or null when no row lingers:
+ * the list needs a clock only then, so an idle list keeps no timer.
+ */
+export function nextLingerDelay(rows: DocketRunRow[], now: number = Date.now(), skew = 0): number | null {
+    let soonest: number | null = null;
+    for (const row of rows) {
+        if (row.linger_until === null) continue;
+        const left = Date.parse(row.linger_until) - (now + skew);
+        if (Number.isFinite(left) && left > 0) soonest = soonest === null ? left : Math.min(soonest, left);
+    }
+    return soonest === null ? null : Math.max(250, Math.ceil(soonest) + 50);
+}
+
+/** Whether two answers show the same rows and cadence, so an unchanged idle poll re-renders nothing. */
+export const sameList = (a: DocketRunList | null, b: DocketRunList): boolean =>
+    a !== null && a.active === b.active && a.empty === b.empty && a.poll_after_ms === b.poll_after_ms && JSON.stringify(a.runs) === JSON.stringify(b.runs);
+
 /** The wait before the next poll: the server's hint (fast while a row is active, slow while idle), a 429's Retry-After, never under 250 ms. */
 export function nextListDelay(list: Pick<DocketRunList, 'poll_after_ms'> | null, retryAfterSeconds?: number | null): number {
     if (retryAfterSeconds != null && Number.isFinite(retryAfterSeconds) && retryAfterSeconds > 0) return Math.max(250, retryAfterSeconds * 1000);

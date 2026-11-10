@@ -1,6 +1,6 @@
 import { computed, onBeforeUnmount, ref, shallowRef, toValue, watch, type ComputedRef, type MaybeRefOrGetter, type Ref, type ShallowRef } from 'vue';
 import { openEventStream, type DocketMode } from './run';
-import { clockSkew, nextListDelay, runsUrl, visibleRows, type DocketRunFilter, type DocketRunList, type DocketRunRow } from './runs';
+import { clockSkew, nextLingerDelay, nextListDelay, runsUrl, sameList, visibleRows, type DocketRunFilter, type DocketRunList, type DocketRunRow } from './runs';
 
 export type DocketRunsState = {
     /** The rows to show now, as the server described them, minus finished rows past their `linger_until`. */
@@ -26,7 +26,7 @@ type Doc = { hidden: boolean; addEventListener(type: string, listener: () => voi
 /**
  * Follows the runs-in-progress list for a filter. Headless: it returns the server's row descriptors and the connection state,
  * and decides nothing about them. It polls fast while any row is active and slowly while idle (both from the server), waits out
- * a 429, pauses while the tab is hidden and resumes when it is shown, and in `streamed` mode listens to the list's event stream,
+ * a 429, pauses while the tab is hidden and resumes when it is shown, keeps no clock unless a finished row is lingering, and in `streamed` mode listens to the list's event stream,
  * falling back to polling on any stream error. A finished row stays until its `linger_until`, then drops off.
  */
 export function useDocketRuns(filter: MaybeRefOrGetter<DocketRunFilter>, options: DocketRunsOptions = {}): DocketRunsState {
@@ -36,16 +36,45 @@ export function useDocketRuns(filter: MaybeRefOrGetter<DocketRunFilter>, options
     const now = ref(Date.now());
     let skew = 0;
     let timer: ReturnType<typeof setTimeout> | null = null;
-    let clock: ReturnType<typeof setInterval> | null = null;
+    let clock: ReturnType<typeof setTimeout> | null = null;
     let closeStream: (() => void) | null = null;
     let generation = 0;
     let failures = 0;
     const doc: Doc | null = typeof document === 'undefined' ? null : (document as unknown as Doc);
 
+    const stopClock = () => {
+        if (clock) clearTimeout(clock);
+        clock = null;
+    };
+
+    // Only the linger display needs a clock, and only until the next lingering row drops off: one timeout to that moment,
+    // none while nothing lingers or the tab is hidden. The server decides every state.
+    const tick = () => {
+        stopClock();
+        if (doc?.hidden) return;
+        const runs = list.value?.runs ?? [];
+        const at = Date.now();
+        // A row whose linger ran out before its timeout fired (a poll landed in between) drops off now.
+        if (visibleRows(runs, now.value, skew).length !== visibleRows(runs, at, skew).length) now.value = at;
+        const delay = nextLingerDelay(runs, at, skew);
+        if (delay !== null) {
+            clock = setTimeout(() => {
+                clock = null;
+                now.value = Date.now();
+                tick();
+            }, delay);
+        }
+    };
+
     const accept = (incoming: DocketRunList) => {
         skew = clockSkew(incoming);
-        now.value = Date.now();
-        list.value = incoming;
+        // An unchanged answer (the usual idle poll) keeps the same list and clock, so nothing downstream re-renders.
+        // A lingering row still drops off on time: the linger timeout advances the clock itself.
+        if (!sameList(list.value, incoming)) {
+            now.value = Date.now();
+            list.value = incoming;
+        }
+        tick();
     };
 
     const halt = () => {
@@ -114,12 +143,21 @@ export function useDocketRuns(filter: MaybeRefOrGetter<DocketRunFilter>, options
         void poll(current);
     };
 
-    const onVisibility = () => (doc?.hidden ? (halt(), (connection.value = 'paused')) : start());
+    const onVisibility = () => {
+        if (doc?.hidden) {
+            halt();
+            stopClock();
+            connection.value = 'paused';
+            return;
+        }
+        now.value = Date.now();
+        tick();
+        start();
+    };
 
     const stop = () => {
         halt();
-        if (clock) clearInterval(clock);
-        clock = null;
+        stopClock();
         doc?.removeEventListener('visibilitychange', onVisibility);
         connection.value = 'idle';
     };
@@ -130,8 +168,6 @@ export function useDocketRuns(filter: MaybeRefOrGetter<DocketRunFilter>, options
     if (typeof window !== 'undefined') {
         watch(() => JSON.stringify(toValue(filter)), start, { immediate: true });
         doc?.addEventListener('visibilitychange', onVisibility);
-        // Only the linger display needs a clock; the server decides every state.
-        clock = setInterval(() => (now.value = Date.now()), 1000);
         onBeforeUnmount(stop);
     }
 
