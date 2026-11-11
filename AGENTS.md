@@ -37,5 +37,5 @@ CI runs these gates on pull requests and pushes to `main`. The test matrix mirro
 - **No attribution or trailers:** no `Co-authored-by`, agent thread IDs, "Generated with" lines or agent session links in commits, PR titles or PR bodies.
 - Check `git log origin/main..HEAD --format=%B` before pushing and remove any attribution.
 - Open pull requests as **drafts**. The title reads like a commit subject; the body explains the change, lists every gate and the CI matrix result, and includes `Closes #N`.
-- Watch CI to completion and fix failures before handing off the PR. Never merge, tag or release; maintainers do that.
+- Watch CI to completion and fix failures before handing off the PR. Contributors never merge, tag or release; the docket lead merges and releases on green CI with the branch up to date with main.
 - This repository is public. Never include secrets, local absolute paths, private application or client names, or internal notes.
