@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+### Fixed
+
+- `DocketRunsList` separates a row's label, step, message and reason, and a failed child's label and reason, with explicit spaces (`{{ ' ' }}`), so they no longer run together after an application publishes the component and its formatter puts each span on its own line. (#69)
+
 ## [0.6.8] - 2026-11-10
 
 ### Fixed
