@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync } from 'node:fs';
+import { readFileSync, existsSync, writeFileSync, unlinkSync } from 'node:fs';
 import { registerHooks, stripTypeScriptTypes } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { parse, compileScript } from 'vue/compiler-sfc';
@@ -163,6 +163,24 @@ test('a partial row lists its failed children with the server\'s reasons', async
     const html = await render(DocketRunsList, { rows: [row] });
     assert.match(html, /data-docket-run-failed-child data-required="false"><span data-docket-run-failed-child-label>Reading the message<\/span> <span data-docket-run-failed-child-reason>The message could not be read.<\/span>/);
     assert.doesNotMatch(html, /mail\.unreadable/);
+});
+
+// A host that publishes the list and runs Prettier (whitespace "css") gets each inline span on its own line, and Vue's condense
+// mode then drops the whitespace-only text between them. The spaces are explicit text, so they survive the reformat.
+test('the runs list keeps the spaces between its inline spans after a host formatter puts each on its own line', async () => {
+    const source = readFileSync(new URL('./DocketRunsList.vue', import.meta.url), 'utf8')
+        .replace(/(<\/span>|<\/template>|\}\}|<template[^>]*>)[ \t]*(?=<span|<template|\{\{)/g, '$1\n                    ');
+    const copy = new URL(`./.reformatted-${process.pid}.vue`, import.meta.url);
+    writeFileSync(copy, source);
+    try {
+        const { default: Reformatted } = await import(copy.href);
+        const row = { ...runsList.runs[1], step: { key: 'render', label: 'Rendering PDF' }, failed_children: [{ id: 'c1', name: 'reading', label: 'Reading the message', required: false, code: 'mail.unreadable', reason: 'The message could not be read.' }] };
+        const text = (await render(Reformatted, { rows: [row] })).replace(/<[^>]+>/g, '').replace(/\s+/g, ' '); // a browser collapses runs of white space
+        assert.match(text, new RegExp(`${row.label} Rendering PDF ${row.message} ${row.reason.replace(/[.?]/g, '\\$&')}`));
+        assert.match(text, /Reading the message The message could not be read\./);
+    } finally {
+        unlinkSync(copy);
+    }
 });
 
 const { default: DocketRunDialog } = await import('./DocketRunDialog.vue');
