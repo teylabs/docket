@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+### Changed
+
+- Links in the published views that open a new tab (View in `DocketRunDialog` and `DocketRunModal`, a row's output and help links in `DocketRunsList`) now end with an up-right arrow and a visually hidden "(opens in new tab)", so a published copy passes tey/standards' `ui new-tab` rule. The arrow is an inline SVG, hidden from screen readers and styled through `data-docket-new-tab`; the text uses Tailwind's `sr-only`. Both come from a new published component, `ExternalLinkIcon.vue`. (#74)
+
+### Upgrade note
+
+- Applications that published the Vue components with `--tag=docket-vue` and haven't edited them: after upgrading to 0.7.0, re-publish with `php artisan vendor:publish --tag=docket-vue --force`. `--force` overwrites every file in `resources/js/docket`, so take the change into an edited copy by hand: publish without `--force` to add `ExternalLinkIcon.vue`, import it, and end each `target="_blank"` link's text with `<ExternalLinkIcon />`. (#74)
+
 ## [0.6.9] - 2026-11-10
 
 ### Fixed

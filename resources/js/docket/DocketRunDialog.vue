@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed, ref } from 'vue';
+import ExternalLinkIcon from './ExternalLinkIcon.vue';
 import { checklistItems, finished, freshDownloadLink, submitDownload, succeeded, type DocketMode, type DocketRun } from './run';
 import { useDocketRun } from './useDocketRun';
 
@@ -55,7 +56,7 @@ async function startDownload(): Promise<void> {
             <button v-if="failed && run?.links.retry" type="button" data-docket-retry @click="retry">{{ text.retry }}</button>
             <div v-else-if="succeeded(run) && run?.output" data-docket-output>
                 <button type="button" data-docket-download @click="startDownload">{{ text.download }}</button>
-                <a v-if="run.links.view" :href="run.links.view" target="_blank" rel="noopener" data-docket-view>{{ text.view }}</a>
+                <a v-if="run.links.view" :href="run.links.view" target="_blank" rel="noopener" data-docket-view>{{ text.view }}<ExternalLinkIcon /></a>
             </div>
         </slot>
         <p v-if="expired" role="alert" data-docket-expired>{{ text.expired }}</p>
