@@ -1,7 +1,7 @@
 <script setup lang="ts">
 /**
  * @internal The end of every link that opens a new tab: the kit's up-right arrow (hidden from screen readers) and a visually
- * hidden "(opens in new tab)". Its name is one the `ui new-tab` rule recognizes as the external icon. Style it through
+ * hidden "(opens in new tab)". Its name is one that the `ui new-tab` rule recognizes as the external icon. Style it through
  * data-docket-new-tab.
  */
 </script>
