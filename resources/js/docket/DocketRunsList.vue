@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import type { DocketRunRow } from './runs';
+import ExternalLinkIcon from './ExternalLinkIcon.vue';
 
 /**
  * Renders run rows exactly as the server described them: label, current step, state message, failure or timeout reason, and
  * the server's links. It decides nothing: no permission, status or threshold logic, and no copy of its own beyond what it is
- * given. Hidden when there are no rows and `hideWhenEmpty` is set; otherwise shows `empty`. Unstyled: style it through the
- * data-docket-* hooks (`data-state` and `data-tone` on each row), or replace a row through the `row` slot.
+ * given, except the screen-reader "(opens in new tab)" after each link's arrow. Hidden when there are no rows and
+ * `hideWhenEmpty` is set; otherwise shows `empty`. Unstyled: style it through the data-docket-* hooks (`data-state` and
+ * `data-tone` on each row), or replace a row through the `row` slot.
  */
 withDefaults(defineProps<{
     rows: DocketRunRow[];
@@ -32,8 +34,8 @@ withDefaults(defineProps<{
                             <span data-docket-run-failed-child-label>{{ child.label }}</span>{{ ' ' }}<span data-docket-run-failed-child-reason>{{ child.reason }}</span>
                         </li>
                     </ul>
-                    <a v-if="row.links.output" :href="row.links.output.url" target="_blank" rel="noopener" data-docket-run-output>{{ row.links.output.label }}</a>
-                    <a v-if="row.links.help" :href="row.links.help.url" target="_blank" rel="noopener" data-docket-run-help>{{ row.links.help.label }}</a>
+                    <a v-if="row.links.output" :href="row.links.output.url" target="_blank" rel="noopener" data-docket-run-output>{{ row.links.output.label }}<ExternalLinkIcon /></a>
+                    <a v-if="row.links.help" :href="row.links.help.url" target="_blank" rel="noopener" data-docket-run-help>{{ row.links.help.label }}<ExternalLinkIcon /></a>
                 </slot>
             </li>
         </ul>

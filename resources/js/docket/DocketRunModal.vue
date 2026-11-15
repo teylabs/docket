@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { onMounted, ref, watch, type MaybeRefOrGetter } from 'vue';
 import DocketProgress from './DocketProgress.vue';
+import ExternalLinkIcon from './ExternalLinkIcon.vue';
 import { claimAutoDownload, freshDownloadLink, submitDownload, succeeded, type DocketMode, type DocketRun, type DocketVariant } from './run';
 import { useDocketRun } from './useDocketRun';
 
@@ -57,7 +58,7 @@ onMounted(() => open.value && dialog.value?.showModal());
                 <slot name="complete" :run="run" :download="startDownload" :enabled="enabled">
                     <div data-docket-output>
                         <button type="button" :disabled="!enabled || !run?.output" data-docket-download @click="startDownload">{{ text.download }}</button>
-                        <a v-if="enabled && run?.links.view" :href="run.links.view" target="_blank" rel="noopener" data-docket-view>{{ text.view }}</a>
+                        <a v-if="enabled && run?.links.view" :href="run.links.view" target="_blank" rel="noopener" data-docket-view>{{ text.view }}<ExternalLinkIcon /></a>
                         <button v-else type="button" disabled data-docket-view>{{ text.view }}</button>
                     </div>
                     <p v-if="expired" role="alert" data-docket-expired>{{ text.expired }}</p>
@@ -67,7 +68,7 @@ onMounted(() => open.value && dialog.value?.showModal());
         <slot v-if="variant !== 'stepper' && succeeded(run) && run?.output" name="complete" :run="run" :download="startDownload" :enabled="true">
             <div data-docket-output>
                 <a :href="run.links.download" data-docket-download @click.prevent="startDownload">{{ text.download }}</a>
-                <a v-if="run.links.view" :href="run.links.view" target="_blank" rel="noopener" data-docket-view>{{ text.view }}</a>
+                <a v-if="run.links.view" :href="run.links.view" target="_blank" rel="noopener" data-docket-view>{{ text.view }}<ExternalLinkIcon /></a>
             </div>
             <p v-if="expired" role="alert" data-docket-expired>{{ text.expired }}</p>
         </slot>

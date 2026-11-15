@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { readFileSync, existsSync, writeFileSync, unlinkSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync, writeFileSync, unlinkSync } from 'node:fs';
 import { registerHooks, stripTypeScriptTypes } from 'node:module';
 import { fileURLToPath } from 'node:url';
 import { parse, compileScript } from 'vue/compiler-sfc';
@@ -42,6 +42,8 @@ const run = (overrides = {}) => ({
 
 // SSR fragment and v-if markers (<!--[-->, <!--v-if-->) are not markup; drop them so assertions read the elements.
 const render = async (component, props, slots = {}) => (await renderToString(createSSRApp({ render: () => h(component, props, slots) }))).replace(/<!--[\s\S]*?-->/g, '');
+// What a link that opens a new tab ends with: the arrow, hidden from screen readers, then the screen-reader text.
+const NEW_TAB = String.raw`<svg data-docket-new-tab viewBox="0 0 24 24" width="14" height="14" aria-hidden="true"><path [^>]*><\/path><\/svg><span class="sr-only"> \(opens in new tab\)<\/span>`;
 const attr = (html, step) => html.match(new RegExp(`<li[^>]*data-status="(\\w+)"[^>]*>(?:(?!</li>).)*${step}`, 's'))?.[1];
 
 test('bar is the default and keeps the existing markup', async () => {
@@ -98,8 +100,11 @@ test('the modal passes the variant through and puts Download and View in the ste
     assert.match(running, /data-docket-step-final[^>]*><div data-docket-output><button type="button" disabled data-docket-download>Download<\/button><button type="button" disabled data-docket-view>View<\/button>/);
 
     const succeeded = await render(DocketRunModal, { run: run({ status: 'succeeded', output: { name: 'r.pdf', mime: 'application/pdf', size: 3 }, links: { download: '/d', view: '/v' }, steps: run().steps.map(step => ({ ...step, status: 'done' })) }), title: 'Building the report', variant: 'stepper', open: false, autoDownload: false });
-    assert.match(succeeded, /<button type="button" data-docket-download>Download<\/button><a href="\/v" target="_blank" rel="noopener" data-docket-view>View<\/a>/);
+    assert.match(succeeded, new RegExp(String.raw`<button type="button" data-docket-download>Download<\/button><a href="\/v" target="_blank" rel="noopener" data-docket-view>View${NEW_TAB}<\/a>`));
     assert.equal((succeeded.match(/data-docket-output/g) ?? []).length, 1);
+
+    const bar = await render(DocketRunModal, { run: run({ status: 'succeeded', output: { name: 'r.pdf', mime: 'application/pdf', size: 3 }, links: { download: '/d', view: '/v' } }), title: 'Building the report', open: false, autoDownload: false });
+    assert.match(bar, new RegExp(String.raw`<a href="\/v" target="_blank" rel="noopener" data-docket-view>View${NEW_TAB}<\/a>`));
 });
 
 const { default: DocketRunsList } = await import('./DocketRunsList.vue');
@@ -111,10 +116,10 @@ test('the runs list renders each row\'s server copy, state and links as given', 
     assert.equal(rows.length, 4);
     assert.match(html, /<h2 data-docket-runs-title>Reports in progress<\/h2>/);
     assert.match(rows[0], /data-state="slow" data-tone="warning"[\s\S]*data-docket-spinner[\s\S]*Monthly report[\s\S]*data-docket-run-step>Rendering PDF[\s\S]*data-docket-run-message>Taking longer than usual/);
-    assert.match(rows[1], /data-state="timed_out" data-tone="danger"[\s\S]*Timed out[\s\S]*data-docket-run-reason>This is taking much longer than expected. It may have stopped.[\s\S]*<a href="https:\/\/example.test\/help" target="_blank" rel="noopener" data-docket-run-help>Get help<\/a>/);
+    assert.match(rows[1], new RegExp(String.raw`data-state="timed_out" data-tone="danger"[\s\S]*Timed out[\s\S]*data-docket-run-reason>This is taking much longer than expected. It may have stopped.[\s\S]*<a href="https:\/\/example.test\/help" target="_blank" rel="noopener" data-docket-run-help>Get help${NEW_TAB}<\/a>`));
     assert.match(rows[2], /data-state="failed"[\s\S]*Something went wrong[\s\S]*It stopped responding./);
     assert.doesNotMatch(rows[2], /data-docket-spinner/);
-    assert.match(rows[3], /data-state="succeeded"[\s\S]*Done[\s\S]*<a href="\/docket\/runs\/a4\/output\/view\?expires=1&amp;signature=s" target="_blank" rel="noopener" data-docket-run-output>Open<\/a>/);
+    assert.match(rows[3], new RegExp(String.raw`data-state="succeeded"[\s\S]*Done[\s\S]*<a href="\/docket\/runs\/a4\/output\/view\?expires=1&amp;signature=s" target="_blank" rel="noopener" data-docket-run-output>Open${NEW_TAB}<\/a>`));
 });
 
 test('the runs list renders the server\'s copy even when it differs from the defaults', async () => {
@@ -215,7 +220,7 @@ test('a done run enables the steps slot and offers Download and View through the
     const seen = [];
     const html = await render(DocketRunDialog, { run: done }, { steps: props => (seen.push(props), h('ol')) });
     assert.equal(seen[0].enabled, true);
-    assert.match(html, /<button type="button" data-docket-download>Download<\/button><a href="\/v" target="_blank" rel="noopener" data-docket-view>View<\/a>/);
+    assert.match(html, new RegExp(String.raw`<button type="button" data-docket-download>Download<\/button><a href="\/v" target="_blank" rel="noopener" data-docket-view>View${NEW_TAB}<\/a>`));
     assert.doesNotMatch(html, /role="alert"|data-docket-retry/);
 
     const settling = await render(DocketRunDialog, { run: { ...done, settling: true } });
@@ -247,4 +252,14 @@ test('a failed step shows the failures label for its code, else the server\'s re
     const server = await render(DocketProgress, { run: failedRun({ checklist }), variant: 'stepper' });
     assert.match(server, /data-docket-step-error role="alert">The renderer timed out\.</);
     assert.doesNotMatch(server, /report\.render_failed/);
+});
+
+test('every published link that opens a new tab ends with the external-link icon', () => {
+    const dir = new URL('./', import.meta.url);
+    const links = readdirSync(dir).filter(file => file.endsWith('.vue')).flatMap(file => [...readFileSync(new URL(file, dir), 'utf8').matchAll(/<a\b[^>]*target="_blank"[^>]*>[\s\S]*?<\/a>/g)].map(([link]) => [file, link]));
+    assert.equal(links.length, 5);
+    for (const [file, link] of links) {
+        assert.match(link, /rel="noopener"/, file);
+        assert.match(link, /<ExternalLinkIcon \/><\/a>$/, file);
+    }
 });
