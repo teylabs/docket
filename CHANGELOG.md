@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [0.7.0] - 2026-11-15
+
 ### Changed
 
 - Links in the published views that open a new tab (View in `DocketRunDialog` and `DocketRunModal`, a row's output and help links in `DocketRunsList`) now end with an up-right arrow and a visually hidden "(opens in new tab)", so a published copy passes tey/standards' `ui new-tab` rule. The arrow is an inline SVG, hidden from screen readers and styled through `data-docket-new-tab`; the text uses Tailwind's `sr-only`. Both come from a new published component, `ExternalLinkIcon.vue`. (#74)
