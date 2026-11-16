@@ -436,7 +436,7 @@ class PendingRun
         $query = Run::query()->unfinished()->named($this->name)
             ->where('subject_type', $this->subject?->getMorphClass())
             // subject_id is a string column: compare it as one, or PostgreSQL refuses `varchar = integer` for integer-keyed subjects.
-            ->where('subject_id', $this->subject === null ? null : (string) $this->subject->getKey());
+            ->where('subject_id', $this->subjectKey());
 
         if (! $this->isShared) {
             [$type, $id] = $this->initiatorIdentity();
@@ -487,5 +487,13 @@ class PendingRun
         }
 
         return $keys === [] ? null : count(array_unique($keys));
+    }
+
+    /** The subject's key as stored: subject_id is a string column, so an integer key is compared as its string. */
+    private function subjectKey(): ?string
+    {
+        $key = $this->subject?->getKey();
+
+        return is_int($key) || is_string($key) ? (string) $key : null;
     }
 }
