@@ -249,3 +249,18 @@ it('rejects an unknown configured database connection through Laravel', function
         ->toThrow(InvalidArgumentException::class, 'Database connection [missing] not configured.');
     config(['docket.connection' => null]);
 });
+
+it('reuses a shared run about an integer-keyed subject, comparing the string subject_id as a string', function () {
+    Schema::create('uploads', function (Blueprint $table) {
+        $table->id();
+        $table->timestamps();
+    });
+    $upload = Upload::create();
+
+    $first = Docket::about($upload)->shared(system: true)->run('intake.email', fn () => null);
+    $running = Run::query()->create(['name' => 'intake.email', 'status' => 'running', 'subject_type' => $upload->getMorphClass(), 'subject_id' => (string) $upload->getKey()]);
+    $second = Docket::about($upload)->shared(system: true)->run('intake.email', fn () => null);
+
+    expect($first->run()->subject_id)->toBe((string) $upload->getKey())
+        ->and($second->run()->id)->toBe($running->id);
+});
