@@ -435,7 +435,8 @@ class PendingRun
 
         $query = Run::query()->unfinished()->named($this->name)
             ->where('subject_type', $this->subject?->getMorphClass())
-            ->where('subject_id', $this->subject?->getKey());
+            // subject_id is a string column: compare it as one, or PostgreSQL refuses `varchar = integer` for integer-keyed subjects.
+            ->where('subject_id', $this->subject === null ? null : (string) $this->subject->getKey());
 
         if (! $this->isShared) {
             [$type, $id] = $this->initiatorIdentity();
