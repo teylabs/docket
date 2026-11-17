@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## [0.7.3] - 2026-11-17
+
+Features affected: runs started with an idempotency key.
+
+### Added
+
+- `findByKey($key)` and `findByKeys($keys)` on a pending run (`Docket::name('listing.read')->findByKey('listing:1')`) find the unexpired run an idempotency key started, under the same rule as starting it: per initiator (`by()`, or the signed-in user) unless `shared()`. Not shared and nobody to attribute it to finds nothing. `findByKeys()` returns a collection keyed by the keys you passed, leaving out keys with no run. Keys are stored hashed with the run's name and initiator, so a raw `docket_runs.idempotency_key` query only matches if an app rebuilds that hash; use these instead.
+
 ## [0.7.2] - 2026-11-17
 
 Features affected: runs on an integer-keyed subject (`HasRuns`), on PostgreSQL behind a transaction pooler.

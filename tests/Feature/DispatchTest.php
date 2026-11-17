@@ -729,3 +729,31 @@ it('defers added work until the application commits and records a rollback', fun
         expect(Queue::size())->toBe(0)->and($ticket->run()->error['code'])->toBe('run.rolled_back');
     }
 })->with([true, false]);
+
+it('finds runs by idempotency key under the same per-initiator and shared rules as starting them, singly and in a batch', function () {
+    $owner = signInAs();
+    freezeTime();
+    $first = Docket::job(new RecordWork)->name('listing.read')->idempotencyKey('listing:1')->expiresAt(now()->addMinute())->dispatch();
+    $second = Docket::job(new RecordWork)->name('listing.read')->idempotencyKey('listing:2')->dispatch();
+    $shared = Docket::job(new RecordWork)->name('listing.shared')->shared(system: true)->idempotencyKey('listing:3')->dispatch();
+
+    expect(Docket::name('listing.read')->findByKey('listing:1')?->id)->toBe($first->id)
+        ->and(Docket::name('listing.read')->findByKeys(['listing:1', 'listing:2', 'listing:9'])->map->id->all())->toBe(['listing:1' => $first->id, 'listing:2' => $second->id])
+        ->and(Docket::name('other')->findByKey('listing:1'))->toBeNull()
+        // A per-user key is found only by its user, never as shared.
+        ->and(Docket::name('listing.shared')->shared()->findByKey('listing:3')?->id)->toBe($shared->id)
+        ->and(Docket::name('listing.read')->shared()->findByKey('listing:1'))->toBeNull();
+
+    signInAs(2);
+    expect(Docket::name('listing.read')->findByKeys(['listing:1', 'listing:2']))->toBeEmpty()
+        ->and(Docket::name('listing.shared')->findByKey('listing:3'))->toBeNull()
+        ->and(Docket::name('listing.read')->by($owner)->findByKey('listing:2')?->id)->toBe($second->id);
+
+    // Fail closed: nobody to attribute it to and not shared finds nothing.
+    auth()->logout();
+    expect(Docket::name('listing.read')->by(null)->findByKeys(['listing:1', 'listing:2']))->toBeEmpty();
+
+    travel(2)->minutes();
+    expect(Docket::name('listing.read')->by($owner)->findByKey('listing:1'))->toBeNull()
+        ->and(Docket::name('listing.read')->by($owner)->findByKey('listing:2')?->id)->toBe($second->id);
+});

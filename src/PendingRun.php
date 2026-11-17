@@ -8,6 +8,7 @@ use Illuminate\Auth\Access\AuthorizationException;
 use Illuminate\Contracts\Auth\Authenticatable;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\QueryException;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Gate;
 use InvalidArgumentException;
 use Laravel\SerializableClosure\SerializableClosure;
@@ -143,6 +144,73 @@ class PendingRun
         $this->key = $key;
 
         return $this;
+    }
+
+    /**
+     * The unexpired run this run's name and an idempotency key started, under the same rule as starting it: per initiator (`by()`,
+     * or the signed-in user) unless `shared()`. Nobody to attribute it to and not shared finds nothing, as starting never reuses then.
+     *
+     * @api
+     */
+    public function findByKey(string $key): ?Run
+    {
+        return $this->findByKeys([$key])->get($key);
+    }
+
+    /**
+     * As `findByKey()`, for several keys at once, keyed by the key you passed (a key with no run is left out).
+     *
+     * @param  iterable<string>  $keys
+     * @return Collection<string, Run>
+     *
+     * @api
+     */
+    public function findByKeys(iterable $keys): Collection
+    {
+        if ($this->name === '') {
+            throw new InvalidArgumentException('Name the run (name()) before finding it by idempotency key.');
+        }
+
+        $initiator = $this->initiatorIdentity();
+        if (! $this->isShared && $initiator === [null, null]) {
+            return collect();
+        }
+
+        $hashes = [];
+        foreach ($keys as $key) {
+            $hashes[hash('sha256', serialize($this->isShared ? [$this->name, $key] : [$this->name, $key, ['initiator', ...$initiator]]))] = $key;
+            // A key stored before 0.6.6 has no initiator in it: honoured only for the user who used it, as when starting.
+            if (! $this->isShared) {
+                $hashes[hash('sha256', serialize([$this->name, $key]))] ??= $key;
+            }
+        }
+        if ($hashes === []) {
+            return collect();
+        }
+
+        $legacy = $this->isShared ? [] : array_map(fn ($key) => hash('sha256', serialize([$this->name, $key])), array_values(array_unique($hashes)));
+
+        $runs = Run::query()->whereIn('idempotency_key', array_map('strval', array_keys($hashes)))
+            ->where(fn ($query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', now()))
+            ->get();
+
+        $found = [];
+        foreach ($runs as $run) {
+            $key = $hashes[$run->idempotency_key] ?? null;
+            if ($key === null) {
+                continue;
+            }
+            $isLegacy = in_array($run->idempotency_key, $legacy, true);
+            if ($isLegacy && ($run->initiator_type !== $initiator[0] || $run->initiator_id !== $initiator[1])) {
+                continue;
+            }
+            // A current key wins over a legacy one for the same key.
+            if (! isset($found[$key]) || ! $isLegacy) {
+                $found[$key] = $run;
+            }
+        }
+
+        return collect($found);
     }
 
     public function total(int $units): static

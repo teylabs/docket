@@ -41,6 +41,7 @@ use Tey\Docket\Reporting\ReportsWork;
  * @property bool $cancel_requested
  * @property string|null $subject_type
  * @property string|null $subject_id
+ * @property string|null $idempotency_key
  * @property string|null $initiator_type
  * @property string|null $initiator_id
  * @property string|null $parent_run_id
