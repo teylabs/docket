@@ -81,3 +81,38 @@ jobs:
 
       - name: Execute tests
         run: composer test -- --ci
+
+  postgres:
+    # PostgreSQL behind a transaction pooler (emulated prepares): an integer bound against the string subject_id/initiator_id columns is an error there.
+    name: PostgreSQL (emulated prepares) - run lookups
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: docket_test
+        ports: ['5432:5432']
+        options: >-
+          --health-cmd "pg_isready -U postgres" --health-interval 5s --health-timeout 5s --health-retries 10
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v7
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          extensions: dom, curl, libxml, mbstring, zip, pdo_sqlite, pdo_pgsql, intl, fileinfo
+          tools: composer:v2
+          coverage: none
+
+      - name: Install dependencies
+        run: composer update --prefer-stable --prefer-dist --no-interaction
+
+      - name: Run the run-lookup tests on PostgreSQL
+        env:
+          DOCKET_TEST_PGSQL_DATABASE: docket_test
+          DOCKET_TEST_PGSQL_PASSWORD: postgres
+        run: vendor/bin/pest --ci tests/Feature/RunTest.php

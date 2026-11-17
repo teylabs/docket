@@ -2,6 +2,15 @@
 
 ## Unreleased
 
+## [0.7.2] - 2026-11-17
+
+Features affected: runs on an integer-keyed subject (`HasRuns`), on PostgreSQL behind a transaction pooler.
+
+### Fixed
+
+- `HasRuns::runs()` and `latestRun()` compare `subject_id` as the string the column stores, for a single model and when eager-loaded. On PostgreSQL with emulated prepares (PgBouncer, Neon, Laravel Cloud's pooler), an integer-keyed model's runs failed with `SQLSTATE[42883] operator does not exist: character varying = integer`. The legacy idempotency-key and unique-run lookups compare `initiator_id` as a string too. A new CI job runs the run-lookup tests on PostgreSQL with emulated prepares.
+- Read a model's progress through Docket (`$model->runs()->named(...)`, `$model->latestRun`, `Docket::find`, `Docket::snapshot`) rather than querying `docket_runs` directly: those lookups get this handling.
+
 ## [0.7.0] - 2026-11-15
 
 ### Changed

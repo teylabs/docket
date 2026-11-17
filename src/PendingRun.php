@@ -416,7 +416,7 @@ class PendingRun
             if (! $this->isShared && $this->key !== null) {
                 [$type, $id] = $this->initiatorIdentity();
                 $run = Run::query()->where('idempotency_key', hash('sha256', serialize([$this->name, $this->key])))
-                    ->where('initiator_type', $type)->where('initiator_id', $id)
+                    ->where('initiator_type', $type)->where('initiator_id', $id === null ? null : (string) $id)
                     ->where(fn ($query) => $query->whereNull('expires_at')->orWhere('expires_at', '>', now()))->first();
 
                 if ($run !== null) {
@@ -440,7 +440,7 @@ class PendingRun
 
         if (! $this->isShared) {
             [$type, $id] = $this->initiatorIdentity();
-            $query->where('initiator_type', $type)->where('initiator_id', $id);
+            $query->where('initiator_type', $type)->where('initiator_id', $id === null ? null : (string) $id);
         }
 
         return $query->first();

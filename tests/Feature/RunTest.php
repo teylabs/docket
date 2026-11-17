@@ -264,3 +264,27 @@ it('reuses a shared run about an integer-keyed subject, comparing the string sub
     expect($first->run()->subject_id)->toBe((string) $upload->getKey())
         ->and($second->run()->id)->toBe($running->id);
 });
+
+it('reads an integer-keyed subject\'s runs, latest run and eager-loaded runs, comparing the string subject_id as a string', function () {
+    Schema::create('uploads', function (Blueprint $table) {
+        $table->id();
+        $table->timestamps();
+    });
+    [$one, $two] = [Upload::create(), Upload::create()];
+    $runFor = fn (Upload $upload, string $name) => Run::query()->create(['name' => $name, 'status' => 'succeeded', 'subject_type' => $upload->getMorphClass(), 'subject_id' => (string) $upload->getKey()]);
+    $older = $runFor($one, 'intake.email');
+    $newer = $runFor($one, 'intake.email');
+    $other = $runFor($two, 'listing.read');
+
+    expect($one->runs()->pluck('id')->all())->toEqualCanonicalizing([$older->id, $newer->id])
+        ->and($one->runs()->named('intake.email')->count())->toBe(2)
+        ->and($one->latestRun?->id)->toBe($newer->id)
+        ->and($one->runs()->getQuery()->toBase()->bindings['where'])->each->toBeString();
+
+    $loaded = Upload::query()->with(['runs', 'latestRun'])->orderBy('id')->get();
+
+    expect($loaded[0]->runs->pluck('id')->all())->toEqualCanonicalizing([$older->id, $newer->id])
+        ->and($loaded[0]->latestRun?->id)->toBe($newer->id)
+        ->and($loaded[1]->runs->pluck('id')->all())->toBe([$other->id])
+        ->and($loaded[1]->latestRun?->id)->toBe($other->id);
+});

@@ -2,21 +2,32 @@
 
 namespace Tey\Docket;
 
-use Illuminate\Database\Eloquent\Relations\MorphMany;
-use Illuminate\Database\Eloquent\Relations\MorphOne;
+use Tey\Docket\Relations\StringKeyedMorphMany;
+use Tey\Docket\Relations\StringKeyedMorphOne;
 
 /** @api */
 trait HasRuns
 {
-    /** @return MorphMany<Run, $this> */
-    public function runs(): MorphMany
+    /**
+     * This model's runs. subject_id is a string column, so the key is compared as one (an integer key works on PostgreSQL behind a pooler).
+     *
+     * @return StringKeyedMorphMany<Run, $this>
+     */
+    public function runs(): StringKeyedMorphMany
     {
-        return $this->morphMany(Run::class, 'subject');
+        $run = $this->newRelatedInstance(Run::class);
+        $table = $run->getTable();
+
+        return new StringKeyedMorphMany($run->newQuery(), $this, $table.'.subject_type', $table.'.subject_id', $this->getKeyName());
     }
 
-    /** @return MorphOne<Run, $this> */
-    public function latestRun(): MorphOne
+    /** @return StringKeyedMorphOne<Run, $this> */
+    public function latestRun(): StringKeyedMorphOne
     {
-        return $this->morphOne(Run::class, 'subject')->latestOfMany();
+        $run = $this->newRelatedInstance(Run::class);
+        $table = $run->getTable();
+
+        /** @var StringKeyedMorphOne<Run, $this> */
+        return (new StringKeyedMorphOne($run->newQuery(), $this, $table.'.subject_type', $table.'.subject_id', $this->getKeyName()))->latestOfMany();
     }
 }
