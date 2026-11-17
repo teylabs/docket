@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## [0.7.2] - 2026-11-17
+
 Features affected: runs on an integer-keyed subject (`HasRuns`), on PostgreSQL behind a transaction pooler.
 
 ### Fixed
